@@ -9,9 +9,14 @@ import sys
 from pathlib import Path
 
 # 添加项目路径
-sys.path.insert(0, str(Path(__file__).parent))
+PROJECT_ROOT = Path(__file__).parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
-from kuma_claw.skills.kuma-skills-system.scripts.skill_manager import SkillManager
+# 添加 skills 脚本路径（目录名含连字符，需特殊处理）
+SKILLS_SCRIPTS_DIR = PROJECT_ROOT / "skills" / "kuma-skills-system" / "scripts"
+sys.path.insert(0, str(SKILLS_SCRIPTS_DIR))
+
+from skill_manager import SkillManager
 
 
 def test_skill_manager():
@@ -19,7 +24,7 @@ def test_skill_manager():
     print("🧪 测试 SkillManager...")
 
     # 初始化
-    skills_dir = Path(__file__).parent / "kuma_claw" / "skills"
+    skills_dir = PROJECT_ROOT / "kuma_claw" / "skills"
     manager = SkillManager(skills_dir=skills_dir)
 
     # 列出 skills
@@ -50,7 +55,7 @@ def test_skill_manager():
 
     # 获取所有提示词
     prompts = manager.get_all_prompts()
-    print(f"\n📝 提示词长度: {len(prompts)} 字符")
+    print(f"\n📝 提示词长度：{len(prompts)} 字符")
 
     return True
 
@@ -68,7 +73,7 @@ def test_weather_skill():
 
         return True
     except Exception as e:
-        print(f"\n❌ Weather skill 测试失败: {e}")
+        print(f"\n❌ Weather skill 测试失败：{e}")
         return False
 
 
@@ -84,14 +89,14 @@ def main():
     try:
         results.append(("SkillManager", test_skill_manager()))
     except Exception as e:
-        print(f"\n❌ SkillManager 测试失败: {e}")
+        print(f"\n❌ SkillManager 测试失败：{e}")
         results.append(("SkillManager", False))
 
     # 测试 2: Weather Skill
     try:
         results.append(("Weather Skill", test_weather_skill()))
     except Exception as e:
-        print(f"\n❌ Weather Skill 测试失败: {e}")
+        print(f"\n❌ Weather Skill 测试失败：{e}")
         results.append(("Weather Skill", False))
 
     # 总结
