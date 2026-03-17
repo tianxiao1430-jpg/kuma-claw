@@ -5,14 +5,19 @@ Kuma Claw Gateway - Telegram 适配器
 处理 Telegram 消息。
 """
 
-import asyncio
-from typing import Optional
-from telegram import Update, Bot
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
-import uuid
+from __future__ import annotations
 
+import re
+from typing import TYPE_CHECKING
+
+from telegram import Bot, Update
+from telegram.ext import Application, ContextTypes, MessageHandler, filters
+
+from .. import ChannelType, Message
 from .base import BaseAdapter
-from .. import Message, Reply, ChannelType
+
+if TYPE_CHECKING:
+    from ..gateway import Gateway
 
 
 class TelegramAdapter(BaseAdapter):
@@ -20,11 +25,11 @@ class TelegramAdapter(BaseAdapter):
 
     channel = ChannelType.TELEGRAM
 
-    def __init__(self, gateway: "Gateway", token: str):
+    def __init__(self, gateway: Gateway, token: str):
         super().__init__(gateway)
         self.token = token
-        self.app: Optional[Application] = None
-        self.bot: Optional[Bot] = None
+        self.app: Application | None = None
+        self.bot: Bot | None = None
 
     async def start(self):
         """启动 Telegram Bot"""
@@ -80,5 +85,4 @@ class TelegramAdapter(BaseAdapter):
 
     def _extract_mentions(self, text: str) -> list:
         """提取 @ 提及"""
-        import re
         return re.findall(r"@(\w+)", text)

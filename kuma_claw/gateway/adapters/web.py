@@ -5,16 +5,20 @@ Kuma Claw Gateway - Web 适配器
 Web UI 和 WebSocket 通信。
 """
 
-import asyncio
-from typing import Optional, Dict, Set
+from __future__ import annotations
+
+import uuid
+from typing import TYPE_CHECKING, Set
+
+import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-import uvicorn
-import json
-import uuid
 
+from .. import ChannelType, Message
 from .base import BaseAdapter
-from .. import Message, Reply, ChannelType
+
+if TYPE_CHECKING:
+    from ..gateway import Gateway
 
 
 class WebAdapter(BaseAdapter):
@@ -24,7 +28,7 @@ class WebAdapter(BaseAdapter):
 
     def __init__(
         self,
-        gateway: "Gateway",
+        gateway: Gateway,
         host: str = "0.0.0.0",
         port: int = 8080,
     ):
@@ -74,7 +78,7 @@ class WebAdapter(BaseAdapter):
         for ws in self.connections:
             try:
                 await ws.send_json(message)
-            except:
+            except Exception:
                 self.connections.discard(ws)
 
     async def _handle_websocket(self, websocket: WebSocket):
@@ -119,8 +123,11 @@ class WebAdapter(BaseAdapter):
 <head>
     <title>Kuma Claw</title>
     <style>
-        body { font-family: system-ui; max-width: 800px; margin: 0 auto; padding: 20px; }
-        #chat { height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+        body { font-family: system-ui; max-width: 800px;
+               margin: 0 auto; padding: 20px; }
+        #chat { height: 400px; overflow-y: auto;
+                border: 1px solid #ccc; padding: 10px;
+                margin: 10px 0; }
         .msg { margin: 5px 0; }
         .user { color: #0066cc; }
         .bot { color: #009933; }
@@ -150,7 +157,9 @@ class WebAdapter(BaseAdapter):
         send.onclick = () => {
             const content = input.value.trim();
             if (content) {
-                ws.send(JSON.stringify({ content, user_id: 'user', chat_id: 'web' }));
+                ws.send(JSON.stringify({
+                    content, user_id: 'user', chat_id: 'web'
+                }));
                 addMessage('You', content, 'user');
                 input.value = '';
             }
@@ -161,7 +170,8 @@ class WebAdapter(BaseAdapter):
         };
 
         function addMessage(who, text, cls) {
-            chat.innerHTML += `<div class="msg ${cls}"><b>${who}:</b> ${text}</div>`;
+            chat.innerHTML += `<div class="msg ${cls}">
+                <b>${who}:</b> ${text}</div>`;
             chat.scrollTop = chat.scrollHeight;
         }
     </script>

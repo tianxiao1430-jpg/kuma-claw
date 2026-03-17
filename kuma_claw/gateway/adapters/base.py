@@ -5,9 +5,15 @@ Kuma Claw Gateway - Adapter 基类
 所有渠道适配器的基类。
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Optional, Callable, Awaitable
-from .. import Message, Reply, ChannelType
+from typing import TYPE_CHECKING, Awaitable, Callable, Optional
+
+from .. import ChannelType, Message, Reply
+
+if TYPE_CHECKING:
+    from ..gateway import Gateway
 
 
 class BaseAdapter(ABC):
@@ -15,7 +21,7 @@ class BaseAdapter(ABC):
 
     channel: ChannelType
 
-    def __init__(self, gateway: "Gateway"):
+    def __init__(self, gateway: Gateway):
         self.gateway = gateway
         self.on_message: Optional[Callable[[Message], Awaitable[Reply]]] = None
 
