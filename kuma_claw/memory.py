@@ -2,12 +2,14 @@
 Kuma Claw - 记忆系统
 ==================
 参考 OpenClaw 的记忆架构设计
+支持 SQLite + JSON 文件双重持久化
 """
 
 import os
 import json
 import sqlite3
 import hashlib
+import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -47,7 +49,7 @@ class MemoryStats:
 
 
 # ============================================
-# 存储后端
+# 存储后端：SQLite
 # ============================================
 
 class MemoryStore:
@@ -239,14 +241,229 @@ class MemoryStore:
 
 
 # ============================================
+# 存储后端：JSON 文件（会话持久化）
+# ============================================
+
+class SessionStore:
+    """会话存储（JSON 文件落盘）
+    
+    用于将会话历史保存到文件，支持：
+    - 自动保存：每次添加消息时保存
+    - 手动保存：调用 save() 方法
+    - 加载恢复：启动时从文件加载
+    """
+    
+    def __init__(self, data_dir: Optional[str] = None):
+        if data_dir is None:
+            data_dir = str(Path.home() / ".kuma-claw" / "sessions")
+        
+        self.data_dir = Path(data_dir)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 会话数据缓存：{session_id: [messages]}
+        self._sessions: Dict[str, List[Dict]] = {}
+        self._lock = threading.Lock()
+        
+        # 启动时加载现有会话
+        self._load_all_sessions()
+    
+    def _session_file(self, session_id: str) -> Path:
+        """获取会话文件路径"""
+        # 使用 session_id 的哈希值作为文件名，避免特殊字符
+        safe_id = hashlib.sha256(session_id.encode()).hexdigest()[:16]
+        return self.data_dir / f"{safe_id}.json"
+    
+    def _load_all_sessions(self):
+        """加载所有会话文件"""
+        for json_file in self.data_dir.glob("*.json"):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    session_id = data.get('session_id', '')
+                    messages = data.get('messages', [])
+                    if session_id:
+                        self._sessions[session_id] = messages
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Warning: Failed to load session {json_file}: {e}")
+    
+    def load_session(self, session_id: str) -> List[Dict]:
+        """加载会话历史
+        
+        Args:
+            session_id: 会话 ID
+            
+        Returns:
+            消息列表，每条消息包含 {role, content, timestamp}
+        """
+        with self._lock:
+            if session_id in self._sessions:
+                return self._sessions[session_id].copy()
+            
+            # 尝试从文件加载
+            session_file = self._session_file(session_id)
+            if session_file.exists():
+                try:
+                    with open(session_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        messages = data.get('messages', [])
+                        self._sessions[session_id] = messages
+                        return messages.copy()
+                except (json.JSONDecodeError, IOError) as e:
+                    print(f"Warning: Failed to load session {session_id}: {e}")
+            
+            return []
+    
+    def save_session(self, session_id: str, messages: List[Dict]):
+        """保存会话到文件
+        
+        Args:
+            session_id: 会话 ID
+            messages: 消息列表
+        """
+        with self._lock:
+            self._sessions[session_id] = messages.copy()
+            
+            session_file = self._session_file(session_id)
+            temp_file = session_file.with_suffix('.tmp')
+            
+            try:
+                # 原子写入：先写临时文件，再重命名
+                data = {
+                    'session_id': session_id,
+                    'messages': messages,
+                    'last_updated': datetime.utcnow().isoformat(),
+                    'message_count': len(messages)
+                }
+                
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                
+                # 原子替换
+                temp_file.replace(session_file)
+                
+            except IOError as e:
+                print(f"Error: Failed to save session {session_id}: {e}")
+                # 清理临时文件
+                if temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except:
+                        pass
+    
+    def add_message(self, session_id: str, role: str, content: str):
+        """添加会话消息并自动保存
+        
+        Args:
+            session_id: 会话 ID
+            role: 角色（user/assistant/system）
+            content: 消息内容
+        """
+        with self._lock:
+            if session_id not in self._sessions:
+                self._sessions[session_id] = []
+            
+            message = {
+                'role': role,
+                'content': content,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+            
+            self._sessions[session_id].append(message)
+            
+            # 异步保存（避免阻塞）
+            # 为了简单，这里同步保存，可以改为异步
+            self.save_session(session_id, self._sessions[session_id])
+    
+    def delete_session(self, session_id: str):
+        """删除会话文件
+        
+        Args:
+            session_id: 会话 ID
+        """
+        with self._lock:
+            if session_id in self._sessions:
+                del self._sessions[session_id]
+            
+            session_file = self._session_file(session_id)
+            if session_file.exists():
+                try:
+                    session_file.unlink()
+                except IOError as e:
+                    print(f"Error: Failed to delete session {session_id}: {e}")
+    
+    def list_sessions(self) -> List[str]:
+        """列出所有会话 ID
+        
+        Returns:
+            会话 ID 列表
+        """
+        with self._lock:
+            return list(self._sessions.keys())
+    
+    def get_session_info(self, session_id: str) -> Optional[Dict]:
+        """获取会话元信息
+        
+        Args:
+            session_id: 会话 ID
+            
+        Returns:
+            会话信息 {session_id, message_count, last_updated, created_at}
+        """
+        with self._lock:
+            if session_id not in self._sessions:
+                session_file = self._session_file(session_id)
+                if session_file.exists():
+                    try:
+                        with open(session_file, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            return {
+                                'session_id': session_id,
+                                'message_count': data.get('message_count', 0),
+                                'last_updated': data.get('last_updated'),
+                                'created_at': data.get('created_at')
+                            }
+                    except:
+                        pass
+                return None
+            
+            messages = self._sessions[session_id]
+            if not messages:
+                return None
+            
+            return {
+                'session_id': session_id,
+                'message_count': len(messages),
+                'last_updated': messages[-1].get('timestamp'),
+                'created_at': messages[0].get('timestamp')
+            }
+    
+    def clear_all(self):
+        """清空所有会话文件"""
+        with self._lock:
+            self._sessions.clear()
+            
+            for json_file in self.data_dir.glob("*.json"):
+                try:
+                    json_file.unlink()
+                except IOError as e:
+                    print(f"Error: Failed to delete {json_file}: {e}")
+
+
+# ============================================
 # 记忆管理器
 # ============================================
 
 class MemoryManager:
-    """记忆管理器"""
+    """记忆管理器
     
-    def __init__(self, store: Optional[MemoryStore] = None):
+    整合 SQLite 和 JSON 文件存储：
+    - SQLite：用于长期记忆、事实、偏好
+    - JSON 文件：用于会话历史持久化
+    """
+    
+    def __init__(self, store: Optional[MemoryStore] = None, session_store: Optional[SessionStore] = None):
         self.store = store or MemoryStore()
+        self.session_store = session_store or SessionStore()
         self.embedding_provider = None
     
     def set_embedding_provider(self, provider):
@@ -303,19 +520,45 @@ class MemoryManager:
         return "\n".join(context_parts)
     
     # ============================================
-    # 会话记忆
+    # 会话记忆（支持文件持久化）
     # ============================================
     
     def add_session_message(self, session_id: str, role: str, content: str):
-        """添加会话消息"""
+        """添加会话消息（同时保存到 SQLite 和 JSON 文件）
+        
+        Args:
+            session_id: 会话 ID
+            role: 角色（user/assistant）
+            content: 消息内容
+        """
+        # 保存到 SQLite（用于搜索）
         self.remember(
             content=f"[{role}] {content}",
             source=f"session:{session_id}",
             metadata={"role": role, "session_id": session_id}
         )
+        
+        # 保存到 JSON 文件（用于快速加载会话历史）
+        self.session_store.add_message(session_id, role, content)
     
     def get_session_history(self, session_id: str, limit: int = 50) -> List[Dict]:
-        """获取会话历史"""
+        """获取会话历史（优先从 JSON 文件加载）
+        
+        Args:
+            session_id: 会话 ID
+            limit: 返回数量
+            
+        Returns:
+            消息列表，每条消息包含 {role, content}
+        """
+        # 优先从 JSON 文件加载（更快）
+        messages = self.session_store.load_session(session_id)
+        
+        if messages:
+            # 返回最近的 limit 条
+            return messages[-limit:]
+        
+        # 回退到 SQLite
         entries = self.store.search_by_source(f"session:{session_id}", limit)
         return [
             {
@@ -325,9 +568,39 @@ class MemoryManager:
             for e in entries
         ]
     
+    def save_session(self, session_id: str):
+        """手动保存会话到文件
+        
+        Args:
+            session_id: 会话 ID
+        """
+        messages = self.get_session_history(session_id, limit=1000)
+        self.session_store.save_session(session_id, messages)
+    
     def clear_session(self, session_id: str):
-        """清空会话"""
+        """清空会话（SQLite + JSON 文件）
+        
+        Args:
+            session_id: 会话 ID
+        """
+        # 清空 SQLite
         self.store.clear(f"session:{session_id}")
+        
+        # 删除 JSON 文件
+        self.session_store.delete_session(session_id)
+    
+    def list_sessions(self) -> List[Dict]:
+        """列出所有会话
+        
+        Returns:
+            会话信息列表
+        """
+        session_ids = self.session_store.list_sessions()
+        return [
+            info for info in 
+            [self.session_store.get_session_info(sid) for sid in session_ids]
+            if info is not None
+        ]
     
     # ============================================
     # 长期记忆
@@ -360,6 +633,17 @@ class MemoryManager:
     def stats(self) -> MemoryStats:
         """统计"""
         return self.store.stats()
+    
+    def session_stats(self) -> Dict:
+        """会话统计"""
+        sessions = self.list_sessions()
+        total_messages = sum(s['message_count'] for s in sessions)
+        
+        return {
+            'total_sessions': len(sessions),
+            'total_messages': total_messages,
+            'sessions': sessions
+        }
 
 
 # ============================================
@@ -435,5 +719,19 @@ if __name__ == "__main__":
     for r in results:
         print(f"[{r.score:.2f}] {r.entry.content}")
     
+    # 会话测试
+    session_id = "test_session_001"
+    mm.add_session_message(session_id, "user", "你好")
+    mm.add_session_message(session_id, "assistant", "你好！有什么可以帮助你的？")
+    
+    # 加载会话
+    history = mm.get_session_history(session_id)
+    print(f"\n会话历史：{history}")
+    
+    # 列出会话
+    sessions = mm.list_sessions()
+    print(f"\n会话列表：{sessions}")
+    
     # 统计
-    print(mm.stats())
+    print(f"\n记忆统计：{mm.stats()}")
+    print(f"会话统计：{mm.session_stats()}")
