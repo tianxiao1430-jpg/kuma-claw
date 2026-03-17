@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Optional, Dict
 
 # 配置文件路径
-# 配置文件路径
 OLD_CONFIG_DIR = Path.home() / ".adk-claw"
 CONFIG_DIR = Path.home() / ".kuma-claw"
 
@@ -17,9 +16,9 @@ if OLD_CONFIG_DIR.exists() and not CONFIG_DIR.exists():
     import shutil
     try:
         shutil.copytree(str(OLD_CONFIG_DIR), str(CONFIG_DIR))
-        print(f"📦 [Kuma Claw] 自动迁移旧配置: {OLD_CONFIG_DIR} -> {CONFIG_DIR}")
+        print(f"📦 [Kuma Claw] 自动迁移旧配置：{OLD_CONFIG_DIR} -> {CONFIG_DIR}")
     except Exception as e:
-        print(f"⚠️ [Kuma Claw] 配置迁移失败: {e}")
+        print(f"⚠️ [Kuma Claw] 配置迁移失败：{e}")
 
 CONFIG_FILE = CONFIG_DIR / "config.json"
 SECRETS_FILE = CONFIG_DIR / "secrets.json"
@@ -168,30 +167,6 @@ class Config:
     def get_google_oauth_client_secret(self) -> Optional[str]:
         """获取 Google OAuth Client Secret"""
         return self.secrets.get("google_oauth_client_secret")
-    
-    # ============================================
-    # 状态检查
-    # ============================================
-    
-    def get_google_api_key(self) -> Optional[str]:
-        """获取 Google API Key"""
-        return self.secrets.get("google_api_key") or os.environ.get("GOOGLE_API_KEY")
-    
-    def get_openai_api_key(self) -> Optional[str]:
-        """获取 OpenAI API Key"""
-        return self.secrets.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
-    
-    def get_anthropic_api_key(self) -> Optional[str]:
-        """获取 Anthropic API Key"""
-        return self.secrets.get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")
-    
-    def is_slack_enabled(self) -> bool:
-        """Slack 是否启用"""
-        return bool(self.get_slack_bot_token())
-    
-    def is_telegram_enabled(self) -> bool:
-        """Telegram 是否启用"""
-        return bool(self.get_telegram_token())
 
 
 # 全局配置实例
