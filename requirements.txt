@@ -32,3 +32,8 @@ python-dotenv>=1.0.0
 
 # 搜索（修复：正确的包名）
 duckduckgo-search>=6.0.0
+
+# 测试
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
