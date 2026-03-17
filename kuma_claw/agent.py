@@ -6,17 +6,46 @@ Kuma Claw - Agent 定义
 
 import os
 import logging
+from typing import Optional, List
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 
 # 配置日志
 logger = logging.getLogger("kuma_claw")
 
-try:
-    from .config import config
-    MODEL = config.get_model()
-except ImportError:
-    MODEL = os.environ.get("KUMA_MODEL", "gemini-3.1-flash")
+# 懒加载：模型配置在首次调用时初始化
+_model_cache: Optional[str] = None
+_google_workspace_toolsets_cache: Optional[List] = None
+_agent_cache: Optional[LlmAgent] = None
+
+
+# ============================================
+# 懒加载：模型配置
+# ============================================
+
+def get_model():
+    """获取模型配置（懒加载）"""
+    global _model_cache
+    
+    if _model_cache is not None:
+        return _model_cache
+    
+    # 首次调用时加载
+    try:
+        from .config import config
+        model = config.get_model()
+    except ImportError:
+        model = os.environ.get("KUMA_MODEL", "gemini-3.1-flash")
+    
+    # 根据模型类型初始化
+    if model.startswith("openai/") or model.startswith("anthropic/") or model.startswith("deepseek/"):
+        from google.adk.models.lite_llm import LiteLlm
+        _model_cache = LiteLlm(model=model)
+    else:
+        # 默认 Gemini
+        _model_cache = model
+    
+    return _model_cache
 
 
 # ============================================
@@ -189,62 +218,58 @@ def web_search(query: str, limit: int = 5) -> str:
 # ============================================
 
 def _load_google_workspace_toolsets():
-    """加载 ADK 内置的 Google Workspace 工具集
+    """加载 ADK 内置的 Google Workspace 工具集（懒加载 + 缓存）
 
     Returns:
         工具集列表（失败时返回空列表）
     """
+    global _google_workspace_toolsets_cache
+    
+    if _google_workspace_toolsets_cache is not None:
+        return _google_workspace_toolsets_cache
+    
     try:
         from .tools.adk_google_workspace import create_all_google_workspace_toolsets
-        return create_all_google_workspace_toolsets()
+        _google_workspace_toolsets_cache = create_all_google_workspace_toolsets()
+        logger.info(f"已加载 {len(_google_workspace_toolsets_cache)} 个 Google Workspace 工具集")
+        return _google_workspace_toolsets_cache
     except ImportError as e:
         logger.warning(f"Google Workspace 工具集不可用：{e}")
+        _google_workspace_toolsets_cache = []
         return []
     except Exception as e:
         logger.error(f"加载 Google Workspace 工具集失败：{e}")
+        _google_workspace_toolsets_cache = []
         return []
 
 
 # ============================================
-# 注册工具
+# 懒加载：工具列表
 # ============================================
 
-# 基础工具
-TOOLS = [
-    FunctionTool(func=web_search),
-    FunctionTool(func=get_current_time),
-    FunctionTool(func=echo_message),
-    FunctionTool(func=remember),
-    FunctionTool(func=recall),
-    FunctionTool(func=forget),
-    FunctionTool(func=get_memory_stats),
-]
+def get_tools() -> List[FunctionTool]:
+    """获取工具列表（懒加载）
 
-# 添加 ADK 内置 Google Workspace 工具集
-google_workspace_toolsets = _load_google_workspace_toolsets()
-if google_workspace_toolsets:
-    TOOLS.extend(google_workspace_toolsets)
-    logger.info(f"已加载 {len(google_workspace_toolsets)} 个 Google Workspace 工具集")
+    Returns:
+        工具列表
+    """
+    # 基础工具
+    tools = [
+        FunctionTool(func=web_search),
+        FunctionTool(func=get_current_time),
+        FunctionTool(func=echo_message),
+        FunctionTool(func=remember),
+        FunctionTool(func=recall),
+        FunctionTool(func=forget),
+        FunctionTool(func=get_memory_stats),
+    ]
 
+    # 添加 ADK 内置 Google Workspace 工具集
+    google_workspace_toolsets = _load_google_workspace_toolsets()
+    if google_workspace_toolsets:
+        tools.extend(google_workspace_toolsets)
 
-# ============================================
-# 模型配置
-# ============================================
-
-def get_model():
-    """获取模型配置"""
-    if MODEL.startswith("openai/"):
-        from google.adk.models.lite_llm import LiteLlm
-        return LiteLlm(model=MODEL)
-    elif MODEL.startswith("anthropic/"):
-        from google.adk.models.lite_llm import LiteLlm
-        return LiteLlm(model=MODEL)
-    elif MODEL.startswith("deepseek/"):
-        from google.adk.models.lite_llm import LiteLlm
-        return LiteLlm(model=MODEL)
-    else:
-        # 默认 Gemini
-        return MODEL
+    return tools
 
 
 # ============================================
@@ -298,7 +323,7 @@ def get_system_instruction(channel: str = "telegram") -> str:
 
 
 def create_agent(channel: str = "telegram") -> LlmAgent:
-    """创建 Agent 实例（支持渠道适配）
+    """创建 Agent 实例（懒加载 + 支持渠道适配）
 
     Args:
         channel: 渠道名称
@@ -311,30 +336,51 @@ def create_agent(channel: str = "telegram") -> LlmAgent:
         model=get_model(),
         instruction=get_system_instruction(channel),
         description="Kuma Claw - 智能办公助手",
-        tools=TOOLS,
+        tools=get_tools(),
     )
 
 
-# 默认 Agent（向后兼容）
-kuma_claw_agent = LlmAgent(
-    name="kuma_claw",
-    model=get_model(),
-    instruction=get_system_instruction("telegram"),
-    description="Kuma Claw - 智能办公助手",
-    tools=TOOLS,
-)
+def get_agent(channel: str = "telegram") -> LlmAgent:
+    """获取 Agent 实例（单例模式，懒加载）
+
+    Args:
+        channel: 渠道名称
+
+    Returns:
+        Agent 实例
+    """
+    global _agent_cache
+    
+    if _agent_cache is not None:
+        return _agent_cache
+    
+    _agent_cache = create_agent(channel)
+    return _agent_cache
 
 
 # ============================================
-# 导出
+# 导出（向后兼容）
 # ============================================
 
-root_agent = kuma_claw_agent
+# 懒加载：仅在访问时创建
+def __getattr__(name):
+    """支持模块级属性的懒加载"""
+    if name == "kuma_claw_agent":
+        return get_agent("telegram")
+    elif name == "root_agent":
+        return get_agent("telegram")
+    elif name == "TOOLS":
+        return get_tools()
+    elif name == "MODEL":
+        return get_model()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 if __name__ == "__main__":
     print("Kuma Claw Agent 已定义")
-    print(f"基础工具数量：{len(TOOLS) - len(google_workspace_toolsets)}")
+    tools = get_tools()
+    google_workspace_toolsets = _load_google_workspace_toolsets()
+    print(f"基础工具数量：{len(tools) - len(google_workspace_toolsets)}")
     print(f"Google Workspace 工具集：{len(google_workspace_toolsets)} 个")
-    print(f"总工具数量：{len(TOOLS)}")
+    print(f"总工具数量：{len(tools)}")
     print("\n支持的渠道：telegram, slack, discord, web, whatsapp, console")
