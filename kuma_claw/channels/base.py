@@ -10,9 +10,10 @@ from typing import Dict, List, Optional, Tuple
 from abc import ABC, abstractmethod
 
 from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+from .sessions import SQLiteSessionService
 
 logger = logging.getLogger("kuma_claw.channels")
 
@@ -22,11 +23,11 @@ logger = logging.getLogger("kuma_claw.channels")
 # ============================================
 
 class SessionManager:
-    """统一的会话管理器"""
+    """统一的会话管理器（使用 SQLite 持久化）"""
 
-    def __init__(self, app_name: str = "kuma-claw"):
+    def __init__(self, app_name: str = "kuma-claw", db_path: Optional[str] = None):
         self.app_name = app_name
-        self.session_service = InMemorySessionService()
+        self.session_service = SQLiteSessionService(db_path=db_path)
         self.user_sessions: Dict[str, str] = {}  # session_key -> session_id
 
     async def get_or_create_session(
@@ -94,6 +95,10 @@ class SessionManager:
                 logger.error(f"清除会话失败：{e}")
                 return False
         return False
+
+    async def close(self):
+        """关闭会话服务"""
+        await self.session_service.close()
 
 
 # ============================================
@@ -216,19 +221,19 @@ async def run_agent_with_session_fallback(
 class ChannelHandler(ABC):
     """渠道处理器基类"""
 
-    def __init__(self, channel_name: str, agent):
+    def __init__(self, channel_name: str, agent, db_path: Optional[str] = None):
         self.channel_name = channel_name
         self.agent = agent
-        self.session_manager = SessionManager()
+        self.session_manager = SessionManager(db_path=db_path)
 
-        # 创建 Runner
+        # 创建 Runner（使用持久化会话服务）
         self.runner = Runner(
             app_name="kuma-claw",
             agent=agent,
             session_service=self.session_manager.session_service,
         )
 
-        logger.info(f"{channel_name} 渠道已初始化")
+        logger.info(f"{channel_name} 渠道已初始化（使用 SQLite 持久化会话）")
 
     @abstractmethod
     async def handle_message(self, user_id: str, text: str, **kwargs) -> str:
@@ -297,3 +302,8 @@ class ChannelHandler(ABC):
             parts=parts,
             session_key=session_key,
         )
+
+    async def cleanup(self):
+        """清理资源（在应用关闭时调用）"""
+        await self.session_manager.close()
+        logger.info(f"{self.channel_name} 渠道已清理")
