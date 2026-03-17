@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger("kuma_claw.channels")
 
@@ -58,10 +59,10 @@ class SessionManager:
                 # 获取 session id
                 session_id = session.id if hasattr(session, 'id') else str(session)
                 self.user_sessions[key] = session_id
-                logger.debug(f"创建新会话: key={key}, session={session_id}")
+                logger.debug(f"创建新会话：key={key}, session={session_id}")
 
             except Exception as e:
-                logger.error(f"创建会话失败: {e}")
+                logger.error(f"创建会话失败：{e}")
                 raise
 
         return self.user_sessions[key]
@@ -87,10 +88,10 @@ class SessionManager:
                     session_id=session_id
                 )
                 del self.user_sessions[key]
-                logger.debug(f"清除会话: key={key}")
+                logger.debug(f"清除会话：key={key}")
                 return True
             except Exception as e:
-                logger.error(f"清除会话失败: {e}")
+                logger.error(f"清除会话失败：{e}")
                 return False
         return False
 
@@ -99,6 +100,17 @@ class SessionManager:
 # Agent 运行器
 # ============================================
 
+class LLMAPIError(Exception):
+    """LLM API 调用异常"""
+    pass
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((LLMAPIError, TimeoutError)),
+    reraise=True
+)
 async def run_agent_with_session(
     runner: Runner,
     session_manager: SessionManager,
@@ -106,7 +118,7 @@ async def run_agent_with_session(
     parts: List[types.Part],
     session_key: Optional[str] = None,
 ) -> str:
-    """运行 Agent 并返回响应
+    """运行 Agent 并返回响应（带重试策略）
 
     Args:
         runner: ADK Runner 实例
@@ -117,6 +129,9 @@ async def run_agent_with_session(
 
     Returns:
         Agent 响应文本
+
+    Raises:
+        LLMAPIError: LLM API 调用失败
     """
     try:
         session_id = await session_manager.get_or_create_session(
@@ -142,11 +157,56 @@ async def run_agent_with_session(
                     if part.text:
                         response_text += part.text
 
-        return response_text or "抱歉，我没有理解你的意思。"
+        if not response_text:
+            raise LLMAPIError("LLM 返回空响应")
 
+        return response_text
+
+    except LLMAPIError:
+        raise
+    except TimeoutError as e:
+        logger.warning(f"LLM API 超时，将重试：{e}")
+        raise
     except Exception as e:
-        logger.error(f"运行 Agent 失败: {e}")
-        return f"处理请求时出错: {str(e)}"
+        logger.error(f"运行 Agent 失败：{e}")
+        raise LLMAPIError(f"LLM API 调用失败：{str(e)}")
+
+
+async def run_agent_with_session_fallback(
+    runner: Runner,
+    session_manager: SessionManager,
+    user_id: str,
+    parts: List[types.Part],
+    session_key: Optional[str] = None,
+) -> str:
+    """运行 Agent 并返回响应（带重试和降级处理）
+
+    这是 run_agent_with_session 的包装器，在重试失败后返回友好的错误消息。
+
+    Args:
+        runner: ADK Runner 实例
+        session_manager: 会话管理器
+        user_id: 用户 ID
+        parts: 消息部分列表
+        session_key: 会话键（可选）
+
+    Returns:
+        Agent 响应文本或错误消息
+    """
+    try:
+        return await run_agent_with_session(
+            runner=runner,
+            session_manager=session_manager,
+            user_id=user_id,
+            parts=parts,
+            session_key=session_key,
+        )
+    except LLMAPIError as e:
+        logger.error(f"LLM API 调用失败（重试耗尽）：{e}")
+        return "抱歉，服务暂时不可用，请稍后重试。"
+    except Exception as e:
+        logger.error(f"运行 Agent 失败：{e}")
+        return f"处理请求时出错：{str(e)}"
 
 
 # ============================================
@@ -220,7 +280,7 @@ class ChannelHandler(ABC):
         if images:
             for img_bytes, mime_type in images:
                 if not isinstance(img_bytes, bytes):
-                    logger.warning(f"图片数据类型错误: {type(img_bytes)}，跳过")
+                    logger.warning(f"图片数据类型错误：{type(img_bytes)}，跳过")
                     continue
 
                 parts.append(types.Part(
@@ -230,7 +290,7 @@ class ChannelHandler(ABC):
                     )
                 ))
 
-        return await run_agent_with_session(
+        return await run_agent_with_session_fallback(
             runner=self.runner,
             session_manager=self.session_manager,
             user_id=user_id,
