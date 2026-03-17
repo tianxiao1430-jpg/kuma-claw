@@ -15,7 +15,7 @@ import logging
 import hashlib
 import importlib.util
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Tuple, Set, Any
 from google.adk.tools import FunctionTool
 
 logger = logging.getLogger("kuma_claw")
@@ -541,6 +541,85 @@ class SkillManager:
             logger.info(f"Unloaded skill: {skill_name}")
             return True
         return False
+
+    def register_tools_to_agent(self, agent: Any) -> int:
+        """将 Skills 的工具自动注册到 Agent
+
+        Args:
+            agent: ADK Agent 实例（LlmAgent 或其他兼容类型）
+
+        Returns:
+            注册的工具数量
+        """
+        if not hasattr(agent, 'tools'):
+            logger.warning("Agent 没有 tools 属性，无法注册")
+            return 0
+        
+        skill_tools = self.get_all_tools()
+        
+        if not skill_tools:
+            logger.info("没有可用的 Skill 工具")
+            return 0
+        
+        # 获取现有工具（避免重复）
+        existing_tool_names = set()
+        for tool in agent.tools:
+            if hasattr(tool, 'name'):
+                existing_tool_names.add(tool.name)
+            elif hasattr(tool, 'func') and hasattr(tool.func, '__name__'):
+                existing_tool_names.add(tool.func.__name__)
+        
+        # 过滤已存在的工具
+        new_tools = []
+        for tool in skill_tools:
+            tool_name = None
+            if hasattr(tool, 'name'):
+                tool_name = tool.name
+            elif hasattr(tool, 'func') and hasattr(tool.func, '__name__'):
+                tool_name = tool.func.__name__
+            
+            if tool_name and tool_name not in existing_tool_names:
+                new_tools.append(tool)
+                existing_tool_names.add(tool_name)
+        
+        # 注册新工具
+        if new_tools:
+            agent.tools.extend(new_tools)
+            logger.info(f"注册了 {len(new_tools)} 个 Skill 工具到 Agent")
+            
+            for tool in new_tools:
+                tool_name = getattr(tool, 'name', None)
+                if not tool_name and hasattr(tool, 'func') and hasattr(tool.func, '__name__'):
+                    tool_name = tool.func.__name__
+                logger.debug(f"  - {tool_name}")
+        
+        return len(new_tools)
+
+    def inject_prompts_to_agent(self, agent: Any) -> bool:
+        """将 Skills 的提示词注入到 Agent 的系统指令中
+
+        Args:
+            agent: ADK Agent 实例
+
+        Returns:
+            是否成功
+        """
+        if not hasattr(agent, 'instruction'):
+            logger.warning("Agent 没有 instruction 属性，无法注入")
+            return False
+        
+        skill_prompts = self.get_all_prompts()
+        
+        if not skill_prompts:
+            logger.info("没有可用的 Skill 提示词")
+            return False
+        
+        # 追加到现有指令
+        prompts_section = "\n\n---\n\n## Skills\n\n" + skill_prompts
+        agent.instruction += prompts_section
+        
+        logger.info(f"已注入 Skill 提示词到 Agent")
+        return True
 
 
 # 全局实例
