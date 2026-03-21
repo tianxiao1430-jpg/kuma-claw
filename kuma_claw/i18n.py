@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from rich.console import Console
 from rich.prompt import Prompt
 
@@ -21,7 +22,7 @@ TRANSLATIONS = {
         "start_tg": "Start Telegram Bot",
         "success": "🎉 Success",
         "python_req": "❌ Python 3.10+ required",
-        "not_installed": "Not installed"
+        "not_installed": "Not installed",
     },
     "zh": {
         "banner_title": "Kuma Claw - 智能 Agent 平台",
@@ -38,7 +39,7 @@ TRANSLATIONS = {
         "start_tg": "启动 Telegram Bot",
         "success": "🎉 安装成功",
         "python_req": "❌ 需要 Python 3.10+",
-        "not_installed": "未安装"
+        "not_installed": "未安装",
     },
     "ja": {
         "banner_title": "Kuma Claw - エージェントプラットフォーム",
@@ -55,9 +56,10 @@ TRANSLATIONS = {
         "start_tg": "Telegram Bot を起動",
         "success": "🎉 インストール成功",
         "python_req": "❌ Python 3.10+ が必要です",
-        "not_installed": "未インストール"
-    }
+        "not_installed": "未インストール",
+    },
 }
+
 
 class I18nManager:
     def __init__(self):
@@ -69,7 +71,7 @@ class I18nManager:
     def _load_lang(self):
         if self.lang_file.exists():
             try:
-                with open(self.lang_file, "r", encoding="utf-8") as f:
+                with open(self.lang_file, encoding="utf-8") as f:
                     self.lang = json.load(f).get("lang", "zh")
             except Exception:
                 pass
@@ -84,13 +86,16 @@ class I18nManager:
         console.print("[cyan]1[/cyan]. English")
         console.print("[cyan]2[/cyan]. 中文")
         console.print("[cyan]3[/cyan]. 日本語")
-        choice = Prompt.ask("🌐 Select Language / 选择语言 / 言語を選択", choices=["1", "2", "3"], default="2")
+        choice = Prompt.ask(
+            "🌐 Select Language / 选择语言 / 言語を選択", choices=["1", "2", "3"], default="2"
+        )
         lang_map = {"1": "en", "2": "zh", "3": "ja"}
         self.save_lang(lang_map[choice])
         console.print()
 
     def t(self, key, default=None):
         return TRANSLATIONS.get(self.lang, TRANSLATIONS["zh"]).get(key, default or key)
+
 
 i18n = I18nManager()
 _ = i18n.t

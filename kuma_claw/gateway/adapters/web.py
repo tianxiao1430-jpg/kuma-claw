@@ -8,7 +8,7 @@ Web UI 和 WebSocket 通信。
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, Set
+from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -36,7 +36,7 @@ class WebAdapter(BaseAdapter):
         self.host = host
         self.port = port
         self.app = FastAPI(title="Kuma Claw Web UI")
-        self.connections: Set[WebSocket] = set()
+        self.connections: set[WebSocket] = set()
 
         self._setup_routes()
 
@@ -105,12 +105,14 @@ class WebAdapter(BaseAdapter):
 
                 # 发送回复
                 if reply:
-                    await websocket.send_json({
-                        "type": "reply",
-                        "message_id": reply.message_id,
-                        "content": reply.content,
-                        "agent": reply.agent,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "reply",
+                            "message_id": reply.message_id,
+                            "content": reply.content,
+                            "agent": reply.agent,
+                        }
+                    )
 
         except WebSocketDisconnect:
             self.connections.discard(websocket)

@@ -10,29 +10,30 @@ Kuma Claw - CLI 入口
 - kuma-claw doctor  # 健康检查
 """
 
-import os
-import sys
 import subprocess
-import asyncio
+import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
-from .i18n import i18n, _
+
+from .i18n import i18n
 
 console = Console()
 
 
 def print_banner():
     """打印 Banner"""
-    console.print(Panel.fit(
-        f"[bold cyan]🦞 {i18n.t('banner_title')}[/bold cyan]\n\n[dim]{i18n.t('banner_desc')}[/dim]",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold cyan]🦞 {i18n.t('banner_title')}[/bold cyan]\n\n"
+            f"[dim]{i18n.t('banner_desc')}[/dim]",
+            border_style="cyan",
+        )
+    )
 
 
 def check_python_version():
@@ -77,7 +78,7 @@ AVAILABLE_MODELS = {
         ("gemini-3.1-flash", "⚡ 快速高效（推荐）"),
         ("gemini-3.1-flash-lite-preview", "💨 极低成本，高性能"),
     ],
-"Gemini 3 (预览版)": [
+    "Gemini 3 (预览版)": [
         ("gemini-3-pro", "🔬 最先进多模态理解"),
         ("gemini-3-flash", "⚡ 极低成本卓越性能"),
     ],
@@ -125,7 +126,7 @@ AVAILABLE_MODELS = {
 def get_all_models_flat():
     """获取扁平化的模型列表"""
     models = []
-    for provider, model_list in AVAILABLE_MODELS.items():
+    for model_list in AVAILABLE_MODELS.values():
         models.extend(model_list)
     return models
 
@@ -133,6 +134,7 @@ def get_all_models_flat():
 # ============================================
 # Commands
 # ============================================
+
 
 @click.group()
 def cli():
@@ -175,17 +177,23 @@ def init(non_interactive: bool):
         run_config_wizard()
 
     console.print()
-    console.print(Panel.fit(
-        f"[green]{i18n.t('init_done')}[/green]\n\n[cyan]{i18n.t('next_step')}[/cyan]\n"
-        f"  [bold]kuma-claw run --web[/bold]      {i18n.t('start_web')}\n"
-        f"  [bold]kuma-claw run --telegram[/bold] {i18n.t('start_tg')}",
-        title=i18n.t("success"),
-        border_style="green"
-    ))
+    console.print(
+        Panel.fit(
+            f"[green]{i18n.t('init_done')}[/green]\n\n[cyan]{i18n.t('next_step')}[/cyan]\n"
+            f"  [bold]kuma-claw run --web[/bold]      {i18n.t('start_web')}\n"
+            f"  [bold]kuma-claw run --telegram[/bold] {i18n.t('start_tg')}",
+            title=i18n.t("success"),
+            border_style="green",
+        )
+    )
 
 
 @cli.command()
-@click.option("--section", type=click.Choice(["api", "channels", "model", "oauth", "all"]), default="all")
+@click.option(
+    "--section",
+    type=click.Choice(["api", "channels", "model", "oauth", "all"]),
+    default="all",
+)
 def config(section: str):
     """配置向导（类似 openclaw configure）"""
     print_banner()
@@ -204,21 +212,13 @@ def run_config_wizard(section: str = "all"):
 
         # Google
         current = "已配置" if app_config.get_google_api_key() else "未配置"
-        google_key = Prompt.ask(
-            f"Google API Key [{current}]",
-            default="",
-            show_default=False
-        )
+        google_key = Prompt.ask(f"Google API Key [{current}]", default="", show_default=False)
         if google_key:
             app_config.set_google_api_key(google_key)
             console.print("[green]✅ Google API Key 已保存[/green]")
 
         # OpenAI (可选)
-        openai_key = Prompt.ask(
-            f"OpenAI API Key (可选)",
-            default="",
-            show_default=False
-        )
+        openai_key = Prompt.ask("OpenAI API Key (可选)", default="", show_default=False)
         if openai_key:
             app_config.set_openai_api_key(openai_key)
             console.print("[green]✅ OpenAI API Key 已保存[/green]")
@@ -267,7 +267,7 @@ def run_config_wizard(section: str = "all"):
 
 def run_oauth_config(app_config):
     """配置 Google OAuth"""
-    from .auth import token_manager, ADKCLAW_OFFICIAL_CLIENT_ID
+    from .auth import ADKCLAW_OFFICIAL_CLIENT_ID, token_manager
 
     console.print("[bold]🔐 Google Workspace OAuth 配置[/bold]")
     console.print("[dim]用于 Gmail/Calendar/Sheets/Docs 集成[/dim]")
@@ -304,14 +304,13 @@ def run_oauth_config(app_config):
         console.print("      [dim]使用 KumaClaw 官方 Client ID，一键授权[/dim]")
         console.print()
 
-    console.print(f"  [cyan]{2 if ADKCLAW_OFFICIAL_CLIENT_ID else 1}[/cyan]. 🔧 自定义 Client ID（高级）")
+    console.print(
+        f"  [cyan]{2 if ADKCLAW_OFFICIAL_CLIENT_ID else 1}[/cyan]. 🔧 自定义 Client ID（高级）"
+    )
     console.print("      [dim]使用您自己的 Google Cloud 项目[/dim]")
     console.print()
 
-    choice = Prompt.ask(
-        "选择",
-        default="1" if ADKCLAW_OFFICIAL_CLIENT_ID else "2"
-    )
+    choice = Prompt.ask("选择", default="1" if ADKCLAW_OFFICIAL_CLIENT_ID else "2")
 
     if choice == "1" and ADKCLAW_OFFICIAL_CLIENT_ID:
         # 使用官方 Client ID
@@ -322,17 +321,19 @@ def run_oauth_config(app_config):
     else:
         # 自定义 Client ID
         console.print()
-        console.print(Panel.fit(
-            "[cyan]📋 创建 Google OAuth Client ID 步骤：[/cyan]\n\n"
-            "1. 访问 [link]https://console.cloud.google.com/apis/credentials[/link]\n"
-            "2. 点击 [bold]Create Credentials[/bold] → [bold]OAuth client ID[/bold]\n"
-            "3. 选择 [bold]Desktop app[/bold] 类型\n"
-            "4. 添加授权重定向 URI:\n"
-            "   [dim]http://localhost:8080/oauth/callback[/dim]\n"
-            "5. 复制 Client ID",
-            title="配置指南",
-            border_style="cyan"
-        ))
+        console.print(
+            Panel.fit(
+                "[cyan]📋 创建 Google OAuth Client ID 步骤：[/cyan]\n\n"
+                "1. 访问 [link]https://console.cloud.google.com/apis/credentials[/link]\n"
+                "2. 点击 [bold]Create Credentials[/bold] → [bold]OAuth client ID[/bold]\n"
+                "3. 选择 [bold]Desktop app[/bold] 类型\n"
+                "4. 添加授权重定向 URI:\n"
+                "   [dim]http://localhost:8080/oauth/callback[/dim]\n"
+                "5. 复制 Client ID",
+                title="配置指南",
+                border_style="cyan",
+            )
+        )
         console.print()
 
         client_id_input = Prompt.ask("Google OAuth Client ID")
@@ -348,9 +349,10 @@ def run_oauth_config(app_config):
 
     console.print()
 
+
 def run_oauth_authorization(client_id: str, client_secret: str):
     """运行 OAuth 授权流程"""
-    from .auth import OAuthFlow, token_manager
+    from .auth import OAuthFlow
 
     console.print("[bold]🌐 启动 OAuth 授权流程[/bold]")
     console.print()
@@ -359,50 +361,58 @@ def run_oauth_authorization(client_id: str, client_secret: str):
     flow = OAuthFlow(client_id, client_secret)
 
     # 提示用户
-    console.print(Panel.fit(
-        "[yellow]⚠️  请按以下步骤操作：[/yellow]\n\n"
-        "1. 浏览器将自动打开 Google 授权页面\n"
-        "2. 登录您的 Google 账号\n"
-        "3. 授权 Kuma Claw 访问您的 Google Workspace\n"
-        "4. 授权成功后会自动跳转",
-        title="授权步骤",
-        border_style="yellow"
-    ))
+    console.print(
+        Panel.fit(
+            "[yellow]⚠️  请按以下步骤操作：[/yellow]\n\n"
+            "1. 浏览器将自动打开 Google 授权页面\n"
+            "2. 登录您的 Google 账号\n"
+            "3. 授权 Kuma Claw 访问您的 Google Workspace\n"
+            "4. 授权成功后会自动跳转",
+            title="授权步骤",
+            border_style="yellow",
+        )
+    )
     console.print()
 
     if not Confirm.ask("准备好了吗？", default=True):
-        console.print("[yellow]已取消授权。稍后运行 [bold]kuma-claw oauth-authorize[/bold] 进行授权。[/yellow]")
+        console.print(
+            "[yellow]已取消授权。稍后运行 [bold]kuma-claw oauth-authorize[/bold] 进行授权。[/yellow]"
+        )
         return
 
     # 保存 state 用于验证
     import json
-    from pathlib import Path
+
     state_file = Path.home() / ".kuma-claw" / "oauth_state.json"
     state_file.parent.mkdir(parents=True, exist_ok=True)
     with open(state_file, "w") as f:
-        json.dump({
-            "state": flow.state,
-            "client_id": client_id,
-            "client_secret": client_secret,
-        }, f)
+        json.dump(
+            {
+                "state": flow.state,
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            f,
+        )
 
     # 打开浏览器
     console.print("[cyan]正在打开浏览器...[/cyan]")
     flow.start_authorization()
 
     console.print()
-    console.print(Panel.fit(
-        "[yellow]⏳ 等待授权...[/yellow]\n\n"
-        "[dim]完成授权后，页面会自动显示成功信息[/dim]\n\n"
-        "[cyan]如果没有自动打开浏览器，请手动访问：[/cyan]\n"
-        f"[link]{flow.get_authorization_url()}[/link]",
-        title="OAuth 授权",
-        border_style="yellow"
-    ))
+    console.print(
+        Panel.fit(
+            "[yellow]⏳ 等待授权...[/yellow]\n\n"
+            "[dim]完成授权后，页面会自动显示成功信息[/dim]\n\n"
+            "[cyan]如果没有自动打开浏览器，请手动访问：[/cyan]\n"
+            f"[link]{flow.get_authorization_url()}[/link]",
+            title="OAuth 授权",
+            border_style="yellow",
+        )
+    )
 
     console.print()
     console.print("[dim]提示：授权完成后，运行 [bold]kuma-claw oauth-status[/bold] 查看状态[/dim]")
-
 
 
 @cli.command()
@@ -429,8 +439,8 @@ def oauth_authorize():
 @cli.command()
 def oauth_status():
     """查看 Google OAuth 状态"""
-    from .config import config as app_config
     from .auth import token_manager
+    from .config import config as app_config
 
     print_banner()
     console.print()
@@ -453,13 +463,16 @@ def oauth_status():
 
     if tokens:
         from datetime import datetime
+
         expires_at = datetime.fromisoformat(tokens["expires_at"])
         is_expired = token_manager.token_expired()
 
         if is_expired:
             console.print("[yellow]  ⚠️  Token 已过期（需要刷新）[/yellow]")
         else:
-            console.print(f"[green]  ✅ Token 有效（过期时间: {expires_at.strftime('%Y-%m-%d %H:%M')}）[/green]")
+            console.print(
+                f"[green]  ✅ Token 有效（过期时间: {expires_at.strftime('%Y-%m-%d %H:%M')}）[/green]"  # noqa: E501
+            )
 
         console.print(f"[dim]     更新时间: {tokens['updated_at']}[/dim]")
     else:
@@ -564,8 +577,8 @@ def doctor():
     print_banner()
     console.print()
 
-    from .config import config as app_config
     from .auth import token_manager
+    from .config import config as app_config
 
     issues = []
 
@@ -585,9 +598,11 @@ def doctor():
     console.print("[bold]⚙️  配置[/bold]")
 
     # API Keys
-    has_api = bool(app_config.get_google_api_key() or
-                   app_config.get_openai_api_key() or
-                   app_config.get_anthropic_api_key())
+    has_api = bool(
+        app_config.get_google_api_key()
+        or app_config.get_openai_api_key()
+        or app_config.get_anthropic_api_key()
+    )
     if has_api:
         console.print("[green]  ✅ API Key 已配置[/green]")
     else:
@@ -617,36 +632,34 @@ def doctor():
 
     # Summary
     if issues:
-        console.print(Panel.fit(
-            "[yellow]⚠️  发现问题：[/yellow]\n" + "\n".join(f"  • {i}" for i in issues),
-            title="诊断结果",
-            border_style="yellow"
-        ))
+        console.print(
+            Panel.fit(
+                "[yellow]⚠️  发现问题：[/yellow]\n" + "\n".join(f"  • {i}" for i in issues),
+                title="诊断结果",
+                border_style="yellow",
+            )
+        )
         console.print()
         console.print("[cyan]修复建议：[/cyan]")
         console.print("  [bold]kuma-claw config[/bold]  运行配置向导")
     else:
-        console.print(Panel.fit(
-            "[green]✅ 所有检查通过！[/green]",
-            title="诊断结果",
-            border_style="green"
-        ))
+        console.print(
+            Panel.fit("[green]✅ 所有检查通过！[/green]", title="诊断结果", border_style="green")
+        )
 
 
 @cli.command()
 def version():
     """显示版本"""
     from . import __version__
+
     console.print(f"[bold cyan]Kuma Claw[/bold cyan] v{__version__}")
 
 
 @cli.command("list-models")
 def list_models():
     """列出所有可用模型"""
-    console.print(Panel.fit(
-        "[bold cyan]🤖 可用模型列表[/bold cyan]",
-        border_style="cyan"
-    ))
+    console.print(Panel.fit("[bold cyan]🤖 可用模型列表[/bold cyan]", border_style="cyan"))
     console.print()
 
     for provider, models in AVAILABLE_MODELS.items():
@@ -661,6 +674,7 @@ def list_models():
 # ============================================
 # Entry Point
 # ============================================
+
 
 if __name__ == "__main__":
     cli()

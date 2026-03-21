@@ -5,9 +5,8 @@ Kuma Claw - Google Workspace 工具集
 使用 ADK 内置的 GoogleApiToolset。
 """
 
-import os
 import logging
-from typing import List, Optional
+import os
 
 from google.adk.tools.base_toolset import BaseToolset
 
@@ -16,13 +15,14 @@ logger = logging.getLogger("kuma_claw.google_workspace")
 
 try:
     from google.adk.tools.google_api_tool import (
+        BigQueryToolset,
         CalendarToolset,
+        DocsToolset,
         GmailToolset,
         SheetsToolset,
-        DocsToolset,
         YoutubeToolset,
-        BigQueryToolset,
     )
+
     ADK_TOOLSETS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"ADK GoogleApiToolset 不可用: {e}")
@@ -34,56 +34,56 @@ except ImportError:
     config = None
 
 
-def get_oauth_credentials() -> tuple[Optional[str], Optional[str]]:
+def get_oauth_credentials() -> tuple[str | None, str | None]:
     """获取 OAuth 凭证
-    
+
     Returns:
         (client_id, client_secret) 元组
     """
     client_id = None
     client_secret = None
-    
+
     # 从配置获取
     if config:
         client_id = config.get_google_oauth_client_id()
         client_secret = config.get_google_oauth_client_secret()
-    
+
     # 环境变量后备
     if not client_id:
         client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
     if not client_secret:
         client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
-    
+
     return client_id, client_secret
 
 
 def _create_toolset(
     toolset_class,
     tool_name: str,
-    tool_filter: Optional[List[str]] = None,
+    tool_filter: list[str] | None = None,
     tool_name_prefix: str = None,
-) -> Optional[BaseToolset]:
+) -> BaseToolset | None:
     """创建工具集的通用工厂函数
-    
+
     Args:
         toolset_class: 工具集类（如 GmailToolset）
         tool_name: 工具集名称（用于日志）
         tool_filter: 工具过滤器
         tool_name_prefix: 工具名称前缀
-        
+
     Returns:
         工具集实例或 None
     """
     if not ADK_TOOLSETS_AVAILABLE:
         logger.debug(f"{tool_name} 工具集不可用：ADK 未安装")
         return None
-    
+
     client_id, client_secret = get_oauth_credentials()
-    
+
     if not client_id or not client_secret:
         logger.debug(f"{tool_name} 工具集未配置：缺少 OAuth 凭证")
         return None
-    
+
     try:
         toolset = toolset_class(
             client_id=client_id,
@@ -99,15 +99,14 @@ def _create_toolset(
 
 
 def create_gmail_toolset(
-    tool_filter: Optional[List[str]] = None,
-    tool_name_prefix: str = "gmail"
-) -> Optional[BaseToolset]:
+    tool_filter: list[str] | None = None, tool_name_prefix: str = "gmail"
+) -> BaseToolset | None:
     """创建 Gmail 工具集
-    
+
     Args:
         tool_filter: 工具过滤器（如 ["messages_send", "messages_list"]）
         tool_name_prefix: 工具名称前缀
-        
+
     Returns:
         GmailToolset 或 None
     """
@@ -120,9 +119,8 @@ def create_gmail_toolset(
 
 
 def create_calendar_toolset(
-    tool_filter: Optional[List[str]] = None,
-    tool_name_prefix: str = "calendar"
-) -> Optional[BaseToolset]:
+    tool_filter: list[str] | None = None, tool_name_prefix: str = "calendar"
+) -> BaseToolset | None:
     """创建 Calendar 工具集"""
     return _create_toolset(
         CalendarToolset,
@@ -133,9 +131,8 @@ def create_calendar_toolset(
 
 
 def create_sheets_toolset(
-    tool_filter: Optional[List[str]] = None,
-    tool_name_prefix: str = "sheets"
-) -> Optional[BaseToolset]:
+    tool_filter: list[str] | None = None, tool_name_prefix: str = "sheets"
+) -> BaseToolset | None:
     """创建 Sheets 工具集"""
     return _create_toolset(
         SheetsToolset,
@@ -146,9 +143,8 @@ def create_sheets_toolset(
 
 
 def create_docs_toolset(
-    tool_filter: Optional[List[str]] = None,
-    tool_name_prefix: str = "docs"
-) -> Optional[BaseToolset]:
+    tool_filter: list[str] | None = None, tool_name_prefix: str = "docs"
+) -> BaseToolset | None:
     """创建 Docs 工具集"""
     return _create_toolset(
         DocsToolset,
@@ -158,14 +154,14 @@ def create_docs_toolset(
     )
 
 
-def create_all_google_workspace_toolsets() -> List[BaseToolset]:
+def create_all_google_workspace_toolsets() -> list[BaseToolset]:
     """创建所有 Google Workspace 工具集
-    
+
     Returns:
         工具集列表
     """
     toolsets = []
-    
+
     # Gmail - 常用工具
     gmail = create_gmail_toolset(
         tool_filter=[
@@ -178,7 +174,7 @@ def create_all_google_workspace_toolsets() -> List[BaseToolset]:
     )
     if gmail:
         toolsets.append(gmail)
-    
+
     # Calendar - 常用工具
     calendar = create_calendar_toolset(
         tool_filter=[
@@ -192,7 +188,7 @@ def create_all_google_workspace_toolsets() -> List[BaseToolset]:
     )
     if calendar:
         toolsets.append(calendar)
-    
+
     # Sheets - 常用工具
     sheets = create_sheets_toolset(
         tool_filter=[
@@ -206,7 +202,7 @@ def create_all_google_workspace_toolsets() -> List[BaseToolset]:
     )
     if sheets:
         toolsets.append(sheets)
-    
+
     # Docs - 常用工具
     docs = create_docs_toolset(
         tool_filter=[
@@ -216,21 +212,21 @@ def create_all_google_workspace_toolsets() -> List[BaseToolset]:
     )
     if docs:
         toolsets.append(docs)
-    
+
     return toolsets
 
 
 def check_google_workspace_status() -> str:
     """检查 Google Workspace 工具集状态
-    
+
     Returns:
         状态信息字符串
     """
     if not ADK_TOOLSETS_AVAILABLE:
         return "❌ ADK GoogleApiToolset 不可用\n\n需要安装: pip install google-adk>=0.1.0"
-    
+
     client_id, client_secret = get_oauth_credentials()
-    
+
     if not client_id or not client_secret:
         return """❌ Google OAuth 未配置
 
@@ -243,5 +239,5 @@ def check_google_workspace_status() -> str:
      GOOGLE_OAUTH_CLIENT_ID=your_client_id
      GOOGLE_OAUTH_CLIENT_SECRET=your_client_secret
 """
-    
+
     return "✅ Google Workspace 工具集可用\n\n可用服务: Gmail, Calendar, Sheets, Docs"

@@ -5,17 +5,17 @@ Kuma Claw Gateway - 网关核心
 统一消息入口，支持多渠道、多 Agent 路由。
 """
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Dict, Any, List
 from enum import Enum
-import asyncio
-import json
 from pathlib import Path
+from typing import Any
 
 # ============================================
 # 数据模型
 # ============================================
+
 
 class ChannelType(Enum):
     TELEGRAM = "telegram"
@@ -28,14 +28,15 @@ class ChannelType(Enum):
 @dataclass
 class Message:
     """统一消息格式"""
+
     id: str
     channel: ChannelType
     user_id: str
     chat_id: str
     content: str
     timestamp: datetime = field(default_factory=datetime.now)
-    reply_to: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    reply_to: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -53,12 +54,13 @@ class Message:
 @dataclass
 class Reply:
     """回复消息"""
+
     id: str
-    message_id: str          # 原消息 ID
+    message_id: str  # 原消息 ID
     content: str
-    agent: str               # 处理的 agent
+    agent: str  # 处理的 agent
     timestamp: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -74,12 +76,13 @@ class Reply:
 @dataclass
 class Session:
     """会话"""
+
     id: str
     user_id: str
     channel: ChannelType
     chat_id: str
     agent_id: str = "default"
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
 
@@ -91,14 +94,16 @@ class Session:
 # 路由规则
 # ============================================
 
+
 @dataclass
 class RoutingRule:
     """路由规则"""
+
     agent: str
-    channel: Optional[str] = None
-    mention: Optional[str] = None
-    keyword: Optional[str] = None
-    user_id: Optional[str] = None
+    channel: str | None = None
+    mention: str | None = None
+    keyword: str | None = None
+    user_id: str | None = None
     is_default: bool = False
 
     def matches(self, message: Message) -> bool:
@@ -125,13 +130,13 @@ class AgentRouter:
     """Agent 路由器"""
 
     def __init__(self):
-        self.rules: List[RoutingRule] = []
+        self.rules: list[RoutingRule] = []
 
     def add_rule(self, rule: RoutingRule):
         """添加路由规则"""
         self.rules.append(rule)
 
-    def load_rules(self, config: List[dict]):
+    def load_rules(self, config: list[dict]):
         """从配置加载规则"""
         for rule_config in config:
             rule = RoutingRule(
@@ -158,11 +163,12 @@ class AgentRouter:
 # 会话管理器
 # ============================================
 
+
 class SessionManager:
     """会话管理器"""
 
     def __init__(self):
-        self.sessions: Dict[str, Session] = {}
+        self.sessions: dict[str, Session] = {}
 
     def _session_key(self, channel: ChannelType, chat_id: str) -> str:
         return f"{channel.value}:{chat_id}"
@@ -188,7 +194,7 @@ class SessionManager:
         session.touch()
         return session
 
-    def get(self, channel: ChannelType, chat_id: str) -> Optional[Session]:
+    def get(self, channel: ChannelType, chat_id: str) -> Session | None:
         """获取会话"""
         key = self._session_key(channel, chat_id)
         return self.sessions.get(key)
@@ -205,21 +211,22 @@ class SessionManager:
 # Gateway 核心
 # ============================================
 
+
 class Gateway:
     """网关核心"""
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         self.config = self._load_config(config_path)
         self.router = AgentRouter()
         self.session_manager = SessionManager()
-        self.agents: Dict[str, Any] = {}  # agent_id -> Agent 实例
-        self.adapters: Dict[ChannelType, Any] = {}  # channel -> Adapter 实例
+        self.agents: dict[str, Any] = {}  # agent_id -> Agent 实例
+        self.adapters: dict[ChannelType, Any] = {}  # channel -> Adapter 实例
 
         # 加载路由规则
         if "routing" in self.config:
             self.router.load_rules(self.config["routing"])
 
-    def _load_config(self, config_path: Optional[str]) -> dict:
+    def _load_config(self, config_path: str | None) -> dict:
         """加载配置"""
         if config_path:
             path = Path(config_path)
@@ -227,7 +234,7 @@ class Gateway:
             path = Path.home() / ".kuma-claw" / "gateway.json"
 
         if path.exists():
-            with open(path, "r") as f:
+            with path.open("r") as f:
                 return json.load(f)
 
         return {
@@ -235,9 +242,7 @@ class Gateway:
                 "host": "0.0.0.0",
                 "port": 19001,
             },
-            "routing": [
-                {"default": True, "agent": "default"}
-            ]
+            "routing": [{"default": True, "agent": "default"}],
         }
 
     def register_agent(self, agent_id: str, agent: Any):
@@ -297,6 +302,7 @@ class Gateway:
 # 便捷函数
 # ============================================
 
-def create_gateway(config_path: Optional[str] = None) -> Gateway:
+
+def create_gateway(config_path: str | None = None) -> Gateway:
     """创建网关实例"""
     return Gateway(config_path)

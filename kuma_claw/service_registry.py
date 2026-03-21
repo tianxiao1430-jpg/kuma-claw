@@ -6,11 +6,11 @@ Kuma Claw - 服务状态注册表
 """
 
 import time
-from typing import Dict, Literal
+from typing import Literal
 
 ServiceStatus = Literal["connected", "error", "disabled", "starting"]
 
-_registry: Dict[str, Dict] = {}
+_registry: dict[str, dict] = {}
 
 
 def set_status(service: str, status: ServiceStatus, message: str = ""):
@@ -27,6 +27,6 @@ def get_status(service: str) -> ServiceStatus:
     return _registry.get(service, {}).get("status", "disabled")
 
 
-def get_all() -> Dict[str, str]:
+def get_all() -> dict[str, str]:
     """获取所有服务状态（返回简化的 {service: status} 字典）"""
     return {k: v["status"] for k, v in _registry.items()}

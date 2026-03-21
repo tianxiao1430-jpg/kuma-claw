@@ -1,27 +1,31 @@
 """
 Kuma Claw - 配置管理
 ==================
+支持 keyring 安全存储，带加密文件回退
 """
 
-import os
+import base64
+import hashlib
 import json
+import os
+import uuid
 from pathlib import Path
-from typing import Optional, Dict
 
-# 配置文件路径
-OLD_CONFIG_DIR = Path.home() / ".adk-claw"
+# 配置目录
 CONFIG_DIR = Path.home() / ".kuma-claw"
-
-if OLD_CONFIG_DIR.exists() and not CONFIG_DIR.exists():
-    import shutil
-    try:
-        shutil.copytree(str(OLD_CONFIG_DIR), str(CONFIG_DIR))
-        print(f"📦 [Kuma Claw] 自动迁移旧配置：{OLD_CONFIG_DIR} -> {CONFIG_DIR}")
-    except Exception as e:
-        print(f"⚠️ [Kuma Claw] 配置迁移失败：{e}")
-
 CONFIG_FILE = CONFIG_DIR / "config.json"
-SECRETS_FILE = CONFIG_DIR / "secrets.json"
+SECRETS_FILE = CONFIG_DIR / "secrets.enc"
+
+# 尝试导入 keyring
+try:
+    import keyring
+
+    KEYRING_AVAILABLE = True
+except ImportError:
+    KEYRING_AVAILABLE = False
+
+# 服务名称（用于 keyring）
+KEYRING_SERVICE = "kuma-claw"
 
 
 def ensure_config_dir():
@@ -29,144 +33,238 @@ def ensure_config_dir():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _get_machine_key() -> bytes:
+    """获取基于机器标识的加密密钥
+
+    使用机器 UUID 和用户名生成唯一密钥
+    这确保密钥只能在当前机器/用户上解密
+    """
+    machine_id = uuid.getnode()  # 机器唯一标识
+    user = os.environ.get("USER", "default")
+    combined = f"{machine_id}:{user}:kuma-claw-secrets"
+    return hashlib.sha256(combined.encode()).digest()
+
+
+def _encrypt_value(value: str) -> str:
+    """简单加密（XOR + Base64）
+
+    注意：这不是军用级加密，但足以防止明文泄露
+    对于高安全需求，仍应使用 keyring
+    """
+    key = _get_machine_key()
+    value_bytes = value.encode("utf-8")
+    # XOR 加密
+    encrypted = bytes(b ^ key[i % len(key)] for i, b in enumerate(value_bytes))
+    # Base64 编码
+    return base64.b64encode(encrypted).decode("ascii")
+
+
+def _decrypt_value(encrypted_value: str) -> str:
+    """解密"""
+    key = _get_machine_key()
+    encrypted = base64.b64decode(encrypted_value.encode("ascii"))
+    # XOR 解密
+    decrypted = bytes(b ^ key[i % len(key)] for i, b in enumerate(encrypted))
+    return decrypted.decode("utf-8")
+
+
+def _load_secrets_file() -> dict:
+    """从加密文件加载密钥"""
+    if not SECRETS_FILE.exists():
+        return {}
+    try:
+        with SECRETS_FILE.open("r") as f:
+            encrypted_data = json.load(f)
+        # 解密所有值
+        return {k: _decrypt_value(v) for k, v in encrypted_data.items()}
+    except Exception:
+        return {}
+
+
+def _save_secrets_file(secrets: dict):
+    """保存密钥到加密文件"""
+    # 加密所有值
+    encrypted_data = {k: _encrypt_value(v) for k, v in secrets.items()}
+    with SECRETS_FILE.open("w") as f:
+        json.dump(encrypted_data, f)
+    # 设置文件权限为仅用户可读写
+    SECRETS_FILE.chmod(0o600)
+
+
 class Config:
-    """配置管理器"""
-    
+    """配置管理器（支持安全存储）"""
+
     def __init__(self):
         ensure_config_dir()
         self.config = self._load_config()
-        self.secrets = self._load_secrets()
-    
-    def _load_config(self) -> Dict:
+        self._secrets_cache: dict | None = None
+
+    def _load_config(self) -> dict:
         """加载配置"""
         if CONFIG_FILE.exists():
-            with open(CONFIG_FILE, "r") as f:
+            with CONFIG_FILE.open("r") as f:
                 return json.load(f)
         return {
             "model": "gemini-3.1-flash",
-            "channels": {
-                "slack": {"enabled": False},
-                "telegram": {"enabled": False}
-            }
+            "channels": {"slack": {"enabled": False}, "telegram": {"enabled": False}},
         }
-    
-    def _load_secrets(self) -> Dict:
-        """加载密钥"""
-        if SECRETS_FILE.exists():
-            with open(SECRETS_FILE, "r") as f:
-                return json.load(f)
-        return {}
-    
+
     def save(self):
         """保存配置"""
-        with open(CONFIG_FILE, "w") as f:
+        with CONFIG_FILE.open("w") as f:
             json.dump(self.config, f, indent=2)
-        
-        with open(SECRETS_FILE, "w") as f:
-            json.dump(self.secrets, f, indent=2)
-    
+
+    # ============================================
+    # 安全存储（优先 keyring，回退加密文件，最后环境变量）
+    # ============================================
+
+    def _get_secret(self, key: str) -> str | None:
+        """获取密钥（keyring > 加密文件 > 环境变量）"""
+        # 1. 尝试 keyring
+        if KEYRING_AVAILABLE:
+            try:
+                value = keyring.get_password(KEYRING_SERVICE, key)
+                if value:
+                    return value
+            except Exception:
+                pass
+
+        # 2. 尝试加密文件
+        if self._secrets_cache is None:
+            self._secrets_cache = _load_secrets_file()
+        if key in self._secrets_cache:
+            return self._secrets_cache[key]
+
+        # 3. 回退环境变量
+        return os.environ.get(key.upper())
+
+    def _set_secret(self, key: str, value: str) -> bool:
+        """存储密钥（keyring 优先，失败则回退加密文件）
+
+        Returns:
+            True 如果成功存储（keyring 或文件）
+        """
+        stored = False
+        storage_type = "none"
+
+        # 1. 尝试 keyring
+        if KEYRING_AVAILABLE:
+            try:
+                keyring.set_password(KEYRING_SERVICE, key, value)
+                storage_type = "keyring"
+                stored = True
+            except Exception:
+                pass
+
+        # 2. 回退加密文件
+        if not stored:
+            try:
+                if self._secrets_cache is None:
+                    self._secrets_cache = _load_secrets_file()
+                self._secrets_cache[key] = value
+                _save_secrets_file(self._secrets_cache)
+                storage_type = "encrypted-file"
+                stored = True
+            except Exception as e:
+                print(f"⚠️ Warning: Failed to store {key}: {e}")
+
+        if stored and storage_type != "keyring":
+            print(f"ℹ️ Info: {key} stored in {storage_type} (keyring unavailable)")
+
+        return stored
+
     # ============================================
     # API Keys
     # ============================================
-    
+
     def set_google_api_key(self, key: str):
-        """设置 Google API Key"""
-        self.secrets["google_api_key"] = key
-        self.save()
-    
-    def get_google_api_key(self) -> Optional[str]:
-        """获取 Google API Key"""
-        return self.secrets.get("google_api_key") or os.environ.get("GOOGLE_API_KEY")
-    
+        self._set_secret("google_api_key", key)
+
+    def get_google_api_key(self) -> str | None:
+        return self._get_secret("google_api_key")
+
     def set_openai_api_key(self, key: str):
-        """设置 OpenAI API Key"""
-        self.secrets["openai_api_key"] = key
-        self.save()
-    
-    def get_openai_api_key(self) -> Optional[str]:
-        """获取 OpenAI API Key"""
-        return self.secrets.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
-    
+        self._set_secret("openai_api_key", key)
+
+    def get_openai_api_key(self) -> str | None:
+        return self._get_secret("openai_api_key")
+
     def set_anthropic_api_key(self, key: str):
-        """设置 Anthropic API Key"""
-        self.secrets["anthropic_api_key"] = key
-        self.save()
-    
-    def get_anthropic_api_key(self) -> Optional[str]:
-        """获取 Anthropic API Key"""
-        return self.secrets.get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")
-    
+        self._set_secret("anthropic_api_key", key)
+
+    def get_anthropic_api_key(self) -> str | None:
+        return self._get_secret("anthropic_api_key")
+
     # ============================================
     # Slack
     # ============================================
-    
+
     def set_slack_tokens(self, bot_token: str, app_token: str):
-        """设置 Slack Tokens"""
-        self.secrets["slack_bot_token"] = bot_token
-        self.secrets["slack_app_token"] = app_token
+        self._set_secret("slack_bot_token", bot_token)
+        self._set_secret("slack_app_token", app_token)
         self.config["channels"]["slack"]["enabled"] = True
         self.save()
-    
-    def get_slack_bot_token(self) -> Optional[str]:
-        """获取 Slack Bot Token"""
-        return self.secrets.get("slack_bot_token") or os.environ.get("SLACK_BOT_TOKEN")
-    
-    def get_slack_app_token(self) -> Optional[str]:
-        """获取 Slack App Token"""
-        return self.secrets.get("slack_app_token") or os.environ.get("SLACK_APP_TOKEN")
-    
+
+    def get_slack_bot_token(self) -> str | None:
+        return self._get_secret("slack_bot_token")
+
+    def get_slack_app_token(self) -> str | None:
+        return self._get_secret("slack_app_token")
+
     def is_slack_enabled(self) -> bool:
-        """Slack 是否启用"""
         return self.config["channels"]["slack"]["enabled"]
-    
+
     # ============================================
     # Telegram
     # ============================================
-    
+
     def set_telegram_token(self, token: str):
-        """设置 Telegram Token"""
-        self.secrets["telegram_token"] = token
+        self._set_secret("telegram_bot_token", token)
         self.config["channels"]["telegram"]["enabled"] = True
         self.save()
-    
-    def get_telegram_token(self) -> Optional[str]:
-        """获取 Telegram Token"""
-        return self.secrets.get("telegram_token") or os.environ.get("TELEGRAM_BOT_TOKEN")
-    
+
+    def get_telegram_token(self) -> str | None:
+        return self._get_secret("telegram_bot_token")
+
     def is_telegram_enabled(self) -> bool:
-        """Telegram 是否启用"""
         return self.config["channels"]["telegram"]["enabled"]
-    
+
     # ============================================
     # 模型
     # ============================================
-    
+
     def set_model(self, model: str):
-        """设置模型"""
         self.config["model"] = model
         self.save()
-    
+
     def get_model(self) -> str:
-        """获取模型"""
         return self.config.get("model", "gemini-3.1-flash")
-    
+
     # ============================================
     # OAuth
     # ============================================
-    
+
     def set_google_oauth(self, client_id: str, client_secret: str):
-        """设置 Google OAuth"""
-        self.secrets["google_oauth_client_id"] = client_id
-        self.secrets["google_oauth_client_secret"] = client_secret
-        self.save()
-    
-    def get_google_oauth_client_id(self) -> Optional[str]:
-        """获取 Google OAuth Client ID"""
-        return self.secrets.get("google_oauth_client_id")
-    
-    def get_google_oauth_client_secret(self) -> Optional[str]:
-        """获取 Google OAuth Client Secret"""
-        return self.secrets.get("google_oauth_client_secret")
+        self._set_secret("google_oauth_client_id", client_id)
+        self._set_secret("google_oauth_client_secret", client_secret)
+
+    def get_google_oauth_client_id(self) -> str | None:
+        return self._get_secret("google_oauth_client_id")
+
+    def get_google_oauth_client_secret(self) -> str | None:
+        return self._get_secret("google_oauth_client_secret")
+
+    # ============================================
+    # 便捷方法
+    # ============================================
+
+    def get_storage_status(self) -> dict:
+        """获取安全存储状态（用于调试）"""
+        return {
+            "keyring_available": KEYRING_AVAILABLE,
+            "secrets_file_exists": SECRETS_FILE.exists(),
+            "config_dir": str(CONFIG_DIR),
+        }
 
 
 # 全局配置实例

@@ -1,8 +1,8 @@
 # Kuma Claw 依赖
 
 # Google ADK
-google-adk>=0.1.0
-google-genai>=0.3.0
+google-adk>=1.0.0
+google-genai>=1.0.0
 
 # Slack
 slack-bolt>=1.18.0
@@ -21,8 +21,8 @@ python-multipart>=0.0.6
 click>=8.1.0
 rich>=13.0.0
 
-# OAuth
-httpx>=0.25.0
+# 安全存储
+keyring>=24.0.0
 
 # 记忆系统
 requests>=2.31.0
@@ -30,7 +30,7 @@ requests>=2.31.0
 # 其他
 python-dotenv>=1.0.0
 
-# 搜索（修复：正确的包名）
+# 搜索
 duckduckgo-search>=6.0.0
 
 # 重试策略
