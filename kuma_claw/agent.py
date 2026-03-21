@@ -173,24 +173,9 @@ def _load_google_workspace_toolsets():
 def _load_and_register_skills(tools_list: list) -> int:
     """加载 Skills 并注册工具"""
     try:
-        # 优先从 kuma_claw.skills 加载
-        try:
-            from .skills.skill_manager import skill_manager
-
-            logger.info("从 kuma_claw.skills 加载 skill_manager")
-        except ImportError:
-            # 回退到外部路径
-            skills_path = Path(__file__).parent.parent / "skills" / "kuma-skills-system" / "scripts"
-            if (skills_path / "skill_manager.py").exists():
-                import sys
-
-                sys.path.insert(0, str(skills_path))
-                from skill_manager import skill_manager
-
-                logger.info(f"从 {skills_path} 加载 skill_manager")
-            else:
-                logger.warning("无法加载 skill_manager")
-                return 0
+        # 统一从 kuma_claw.skills 加载
+        from .skills.skill_manager import skill_manager
+        logger.info("从 kuma_claw.skills 加载 skill_manager")
 
         skill_manager.register_tools_to_agent(type("Agent", (), {"tools": tools_list})())
         tools = skill_manager.get_all_tools()
