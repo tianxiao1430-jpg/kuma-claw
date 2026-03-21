@@ -11,14 +11,19 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
-from google.adk.sessions import Session
+from google.adk.sessions import (
+    BaseSessionService,
+    GetSessionConfig,
+    ListSessionsResponse,
+    Session,
+)
 
 logger = logging.getLogger("kuma_claw")
 
 
-class SQLiteSessionService:
+class SQLiteSessionService(BaseSessionService):
     """基于 SQLite 的会话服务（线程安全）"""
 
     def __init__(self, db_path: str | None = None):
@@ -59,10 +64,11 @@ class SQLiteSessionService:
 
     async def create_session(
         self,
+        *,
         app_name: str,
         user_id: str,
-        state: dict[str, Any] | None = None,
-        session_id: str | None = None,
+        state: Optional[dict[str, Any]] = None,
+        session_id: Optional[str] = None,
     ) -> Session:
         """创建会话"""
         session_id = session_id or str(uuid.uuid4())
@@ -87,7 +93,14 @@ class SQLiteSessionService:
             last_update_time=now_ts,
         )
 
-    async def get_session(self, app_name: str, user_id: str, session_id: str, **kwargs) -> Session | None:
+    async def get_session(
+        self,
+        *,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        config: Optional[GetSessionConfig] = None,
+    ) -> Optional[Session]:
         """获取会话"""
         with self._lock:
             row = (
@@ -116,30 +129,46 @@ class SQLiteSessionService:
             last_update_time=last_update_time,
         )
 
-    async def update_session(
-        self, app_name: str, user_id: str, session_id: str, state: dict[str, Any]
-    ) -> Session:
-        """更新会话"""
-        now_iso = datetime.utcnow().isoformat()
-        now_ts = datetime.utcnow().timestamp()
-
+    async def list_sessions(
+        self, *, app_name: str, user_id: Optional[str] = None
+    ) -> ListSessionsResponse:
+        """列出会话"""
         with self._lock:
-            self._get_conn().execute(
-                "UPDATE sessions SET state = ?, updated_at = ? "
-                "WHERE id = ? AND app_name = ? AND user_id = ?",
-                (json.dumps(state), now_iso, session_id, app_name, user_id),
+            if user_id:
+                rows = (
+                    self._get_conn()
+                    .execute(
+                        "SELECT * FROM sessions WHERE app_name = ? AND user_id = ? "
+                        "ORDER BY updated_at DESC",
+                        (app_name, user_id),
+                    )
+                    .fetchall()
+                )
+            else:
+                rows = (
+                    self._get_conn()
+                    .execute(
+                        "SELECT * FROM sessions WHERE app_name = ? ORDER BY updated_at DESC",
+                        (app_name,),
+                    )
+                    .fetchall()
+                )
+
+        sessions = [
+            Session(
+                id=r["id"],
+                app_name=r["app_name"],
+                user_id=r["user_id"],
+                state=json.loads(r["state"]),
+                last_update_time=datetime.fromisoformat(r["updated_at"]).timestamp()
+                if r["updated_at"]
+                else 0.0,
             )
-            self._get_conn().commit()
+            for r in rows
+        ]
+        return ListSessionsResponse(sessions=sessions)
 
-        return Session(
-            id=session_id,
-            app_name=app_name,
-            user_id=user_id,
-            state=state,
-            last_update_time=now_ts,
-        )
-
-    async def delete_session(self, app_name: str, user_id: str, session_id: str) -> bool:
+    async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
         """删除会话"""
         with self._lock:
             cursor = self._get_conn().execute(
@@ -151,31 +180,6 @@ class SQLiteSessionService:
         deleted = cursor.rowcount > 0
         if deleted:
             logger.debug(f"删除会话：id={session_id}")
-        return deleted
-
-    async def list_sessions(self, app_name: str, user_id: str) -> list[Session]:
-        """列出会话"""
-        with self._lock:
-            rows = (
-                self._get_conn()
-                .execute(
-                    "SELECT * FROM sessions WHERE app_name = ? AND user_id = ? "
-                    "ORDER BY updated_at DESC",
-                    (app_name, user_id),
-                )
-                .fetchall()
-            )
-
-        return [
-            Session(
-                id=r["id"],
-                app_name=r["app_name"],
-                user_id=r["user_id"],
-                state=json.loads(r["state"]),
-                last_update_time=datetime.fromisoformat(r["updated_at"]).timestamp() if r["updated_at"] else 0.0,
-            )
-            for r in rows
-        ]
 
     async def close(self):
         """关闭连接"""
