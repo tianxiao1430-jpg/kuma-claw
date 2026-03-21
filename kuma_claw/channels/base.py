@@ -178,7 +178,7 @@ async def run_agent_with_session_fallback(
             runner=runner,
             session_manager=session_manager,
             user_id=user_id,
-            parts=parts,
+            parts=full_parts,
             session_key=session_key,
         )
     except LLMAPIError as e:
@@ -279,10 +279,23 @@ class ChannelHandler(ABC):
                     types.Part(inline_data=types.Blob(mime_type=mime_type, data=img_bytes))
                 )
 
-        # 获取 session_id 用于记忆记录
+        # 获取 session_id
         session_id = await self.session_manager.get_or_create_session(
             user_id=user_id, session_key=session_key
         )
+
+        # 从 memory.db 加载历史消息（恢复对话上下文）
+        history_parts = []
+        try:
+            from ..memory import memory_manager
+            history = memory_manager.get_session_messages(session_id, limit=20)
+            if history:
+                for msg in history:
+                    role = "user" if msg["role"] == "user" else "model"
+                    history_parts.append(types.Part(text=f"{role}: {msg['content']}"))
+                logger.info(f"加载了 {len(history)} 条历史消息")
+        except Exception as e:
+            logger.error(f"加载历史消息失败：{e}")
 
         # --- 记录会话到记忆库 (SQLite) ---
         try:
@@ -292,11 +305,14 @@ class ChannelHandler(ABC):
             logger.error(f"记录用户消息失败：{e}")
         # ------------------------------
 
+        # 构建完整的消息 parts（历史 + 当前）
+        full_parts = history_parts + parts
+
         response = await run_agent_with_session_fallback(
             runner=self.runner,
             session_manager=self.session_manager,
             user_id=user_id,
-            parts=parts,
+            parts=full_parts,
             session_key=session_key,
         )
 
