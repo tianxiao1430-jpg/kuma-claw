@@ -201,7 +201,7 @@ class SQLiteSessionService(BaseSessionService):
             logger.warning(f"更新会话失败：id={session_id} (不存在)")
             return None
         
-        logger.debug(f"更新会话：id={session_id}, state={state}")
+        logger.info(f"更新会话：id={session_id}, state={state}")
         return Session(
             id=session_id,
             app_name=app_name,
