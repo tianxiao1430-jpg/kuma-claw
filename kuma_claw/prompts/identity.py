@@ -95,6 +95,7 @@ _I am {agent_name} — built on Google ADK. Open source, local-first, yours to c
 # 便捷函数
 # ============================================
 
+
 def set_identity(name: str = None, prompt: str = None):
     """设置人设"""
     if name:

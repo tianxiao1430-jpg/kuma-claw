@@ -129,9 +129,7 @@ class MemoryStore:
     def get(self, entry_id: str) -> MemoryEntry | None:
         """获取记忆"""
         row = (
-            self._get_conn()
-            .execute("SELECT * FROM memories WHERE id = ?", (entry_id,))
-            .fetchone()
+            self._get_conn().execute("SELECT * FROM memories WHERE id = ?", (entry_id,)).fetchone()
         )
         return self._row_to_entry(row) if row else None
 
@@ -301,7 +299,9 @@ class MemoryManager:
         self.store = store or MemoryStore()
         self.session_store = session_store or SessionStore()
 
-    def remember(self, content: str, source: str = "fact", metadata: dict | None = None) -> MemoryEntry:
+    def remember(
+        self, content: str, source: str = "fact", metadata: dict | None = None
+    ) -> MemoryEntry:
         """记住"""
         now = datetime.utcnow().isoformat()
         entry = MemoryEntry(

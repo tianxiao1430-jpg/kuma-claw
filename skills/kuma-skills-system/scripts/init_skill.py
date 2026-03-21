@@ -84,7 +84,9 @@ EXAMPLES = [
 
     # 创建 __init__.py
     with open(skill_dir / "__init__.py", "w") as f:
-        f.write(f'"""{skill_name} skill"""\nfrom .tools import TOOLS\nfrom .prompts import SYSTEM_PROMPT, EXAMPLES\n')
+        f.write(
+            f'"""{skill_name} skill"""\nfrom .tools import TOOLS\nfrom .prompts import SYSTEM_PROMPT, EXAMPLES\n'
+        )
 
     print(f"✅ Skill '{skill_name}' 初始化成功")
     print(f"   位置: {skill_dir}")

@@ -1,4 +1,5 @@
 """weather skill"""
+
 from .prompts import EXAMPLES, SYSTEM_PROMPT
 from .tools import TOOLS
 

@@ -105,12 +105,14 @@ class WebAdapter(BaseAdapter):
 
                 # 发送回复
                 if reply:
-                    await websocket.send_json({
-                        "type": "reply",
-                        "message_id": reply.message_id,
-                        "content": reply.content,
-                        "agent": reply.agent,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "reply",
+                            "message_id": reply.message_id,
+                            "content": reply.content,
+                            "agent": reply.agent,
+                        }
+                    )
 
         except WebSocketDisconnect:
             self.connections.discard(websocket)

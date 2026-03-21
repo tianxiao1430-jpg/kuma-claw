@@ -471,7 +471,7 @@ def oauth_status():
             console.print("[yellow]  ⚠️  Token 已过期（需要刷新）[/yellow]")
         else:
             console.print(
-                f"[green]  ✅ Token 有效（过期时间: {expires_at.strftime('%Y-%m-%d %H:%M')}）[/green]"
+                f"[green]  ✅ Token 有效（过期时间: {expires_at.strftime('%Y-%m-%d %H:%M')}）[/green]"  # noqa: E501
             )
 
         console.print(f"[dim]     更新时间: {tokens['updated_at']}[/dim]")
@@ -644,9 +644,7 @@ def doctor():
         console.print("  [bold]kuma-claw config[/bold]  运行配置向导")
     else:
         console.print(
-            Panel.fit(
-                "[green]✅ 所有检查通过！[/green]", title="诊断结果", border_style="green"
-            )
+            Panel.fit("[green]✅ 所有检查通过！[/green]", title="诊断结果", border_style="green")
         )
 
 

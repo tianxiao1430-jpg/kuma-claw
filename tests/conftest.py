@@ -1,4 +1,5 @@
 """Pytest 配置文件"""
+
 import sys
 from pathlib import Path
 
@@ -31,6 +32,7 @@ def sample_user_id():
 def reset_agent_cache():
     """自动重置 Agent 缓存（测试隔离）"""
     from kuma_claw.agent import reset_cache
+
     reset_cache()
     yield
     reset_cache()
@@ -40,6 +42,7 @@ def reset_agent_cache():
 def reset_config():
     """自动重置配置（测试隔离）"""
     from kuma_claw import config as config_module
+
     original_config = config_module.config
     yield
     config_module.config = original_config

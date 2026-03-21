@@ -34,5 +34,7 @@ class WhatsAppChannel(ChannelHandler):
         logger.info("WhatsApp Bot 已停止")
 
 
-def create_whatsapp_channel(agent, phone_id: str, verify_code: str | None = None) -> WhatsAppChannel:
+def create_whatsapp_channel(
+    agent, phone_id: str, verify_code: str | None = None
+) -> WhatsAppChannel:
     return WhatsAppChannel(agent, phone_id, verify_code)

@@ -16,6 +16,7 @@ from typing import Any
 # 数据模型
 # ============================================
 
+
 class ChannelType(Enum):
     TELEGRAM = "telegram"
     SLACK = "slack"
@@ -27,6 +28,7 @@ class ChannelType(Enum):
 @dataclass
 class Message:
     """统一消息格式"""
+
     id: str
     channel: ChannelType
     user_id: str
@@ -52,10 +54,11 @@ class Message:
 @dataclass
 class Reply:
     """回复消息"""
+
     id: str
-    message_id: str          # 原消息 ID
+    message_id: str  # 原消息 ID
     content: str
-    agent: str               # 处理的 agent
+    agent: str  # 处理的 agent
     timestamp: datetime = field(default_factory=datetime.now)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -73,6 +76,7 @@ class Reply:
 @dataclass
 class Session:
     """会话"""
+
     id: str
     user_id: str
     channel: ChannelType
@@ -90,9 +94,11 @@ class Session:
 # 路由规则
 # ============================================
 
+
 @dataclass
 class RoutingRule:
     """路由规则"""
+
     agent: str
     channel: str | None = None
     mention: str | None = None
@@ -157,6 +163,7 @@ class AgentRouter:
 # 会话管理器
 # ============================================
 
+
 class SessionManager:
     """会话管理器"""
 
@@ -204,6 +211,7 @@ class SessionManager:
 # Gateway 核心
 # ============================================
 
+
 class Gateway:
     """网关核心"""
 
@@ -234,9 +242,7 @@ class Gateway:
                 "host": "0.0.0.0",
                 "port": 19001,
             },
-            "routing": [
-                {"default": True, "agent": "default"}
-            ]
+            "routing": [{"default": True, "agent": "default"}],
         }
 
     def register_agent(self, agent_id: str, agent: Any):
@@ -295,6 +301,7 @@ class Gateway:
 # ============================================
 # 便捷函数
 # ============================================
+
 
 def create_gateway(config_path: str | None = None) -> Gateway:
     """创建网关实例"""

@@ -1,4 +1,5 @@
 """配置管理测试"""
+
 import pytest
 
 from kuma_claw.config import Config
@@ -8,12 +9,15 @@ from kuma_claw.config import Config
 def config():
     """创建测试用配置"""
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         import os
+
         original_home = os.environ.get("HOME")
         os.environ["HOME"] = tmpdir
 
         from kuma_claw import config as config_module
+
         config_module.CONFIG_DIR = f"{tmpdir}/.kuma-claw"
         config_module.CONFIG_FILE = f"{tmpdir}/.kuma-claw/config.json"
 

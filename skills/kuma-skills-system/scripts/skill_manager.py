@@ -24,11 +24,13 @@ logger = logging.getLogger("kuma_claw")
 
 class SecurityError(Exception):
     """安全相关错误"""
+
     pass
 
 
 class SkillValidationError(Exception):
     """Skill 验证错误"""
+
     pass
 
 
@@ -38,24 +40,50 @@ class Skill:
     # 允许的安全模块白名单
     ALLOWED_MODULES: set[str] = {
         # 标准库
-        'json', 'pathlib', 'typing', 'datetime', 're', 'math',
-        'collections', 'itertools', 'functools', 'operator',
+        "json",
+        "pathlib",
+        "typing",
+        "datetime",
+        "re",
+        "math",
+        "collections",
+        "itertools",
+        "functools",
+        "operator",
         # Google ADK
-        'google.adk.tools', 'google.adk.agents',
+        "google.adk.tools",
+        "google.adk.agents",
         # 常用安全库
-        'requests', 'httpx', 'aiohttp',
-        'beautifulsoup4', 'bs4',
-        'lxml', 'xml.etree.ElementTree',
+        "requests",
+        "httpx",
+        "aiohttp",
+        "beautifulsoup4",
+        "bs4",
+        "lxml",
+        "xml.etree.ElementTree",
     }
 
     # 危险函数黑名单
     DANGEROUS_FUNCTIONS: set[str] = {
-        'eval', 'exec', 'compile', 'open', 'input',
-        '__import__', 'globals', 'locals', 'vars',
-        'execfile', 'reload',
-        'os.system', 'os.popen', 'os.spawn',
-        'subprocess.call', 'subprocess.run', 'subprocess.Popen',
-        'shutil.rmtree', 'shutil.move',
+        "eval",
+        "exec",
+        "compile",
+        "open",
+        "input",
+        "__import__",
+        "globals",
+        "locals",
+        "vars",
+        "execfile",
+        "reload",
+        "os.system",
+        "os.popen",
+        "os.spawn",
+        "subprocess.call",
+        "subprocess.run",
+        "subprocess.Popen",
+        "shutil.rmtree",
+        "shutil.move",
     }
 
     def __init__(self, skill_dir: Path, verify_signature: bool = False):
@@ -79,23 +107,23 @@ class Skill:
             raise SecurityError(f"Path traversal detected: {metadata_file}")
 
         try:
-            with open(metadata_file, encoding='utf-8') as f:
+            with open(metadata_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             # 验证必需字段
-            required_fields = ['name', 'version', 'triggers']
+            required_fields = ["name", "version", "triggers"]
             missing = [f for f in required_fields if f not in data]
             if missing:
                 raise SkillValidationError(f"Missing required fields: {missing}")
 
             # 验证名称格式
-            name = data.get('name', '')
+            name = data.get("name", "")
             is_valid, error_msg = validate_skill_name(name)
             if not is_valid:
                 raise SkillValidationError(f"Invalid skill name: {error_msg}")
 
             # 验证版本格式
-            version = data.get('version', '')
+            version = data.get("version", "")
             if not validate_version(version):
                 raise SkillValidationError(f"Invalid version format: {version}")
 
@@ -103,7 +131,7 @@ class Skill:
 
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in {metadata_file}: {e}")
-            raise SkillValidationError(f"Invalid JSON: {e}")
+            raise SkillValidationError(f"Invalid JSON: {e}") from e
 
     def _load_tools_safe(self) -> list[FunctionTool]:
         """安全加载 tools.py（沙箱隔离）"""
@@ -119,7 +147,7 @@ class Skill:
 
         try:
             # 读取代码
-            with open(tools_file, encoding='utf-8') as f:
+            with open(tools_file, encoding="utf-8") as f:
                 code = f.read()
 
             # 静态分析：检查危险函数
@@ -127,8 +155,7 @@ class Skill:
 
             # 使用受限模块加载
             spec = importlib.util.spec_from_file_location(
-                f"skill_{self.metadata['name']}_tools",
-                tools_file
+                f"skill_{self.metadata['name']}_tools", tools_file
             )
 
             if spec is None or spec.loader is None:
@@ -179,7 +206,7 @@ class Skill:
             raise SecurityError(f"Path traversal detected: {prompts_file}")
 
         try:
-            with open(prompts_file, encoding='utf-8') as f:
+            with open(prompts_file, encoding="utf-8") as f:
                 code = f.read()
 
             # 静态分析
@@ -187,8 +214,7 @@ class Skill:
 
             # 加载模块
             spec = importlib.util.spec_from_file_location(
-                f"skill_{self.metadata['name']}_prompts",
-                prompts_file
+                f"skill_{self.metadata['name']}_prompts", prompts_file
             )
 
             if spec is None or spec.loader is None:
@@ -220,8 +246,15 @@ class Skill:
 
         # 检查导入危险模块
         dangerous_imports = [
-            'os', 'sys', 'subprocess', 'socket', 'pickle',
-            'marshal', 'shelve', 'ctypes', 'multiprocessing'
+            "os",
+            "sys",
+            "subprocess",
+            "socket",
+            "pickle",
+            "marshal",
+            "shelve",
+            "ctypes",
+            "multiprocessing",
         ]
 
         for mod in dangerous_imports:
@@ -243,54 +276,54 @@ class Skill:
 
         # 白名单化的内置函数
         safe_builtins = {
-            'True': True,
-            'False': False,
-            'None': None,
-            'abs': abs,
-            'all': all,
-            'any': any,
-            'bool': bool,
-            'dict': dict,
-            'enumerate': enumerate,
-            'filter': filter,
-            'float': float,
-            'frozenset': frozenset,
-            'hasattr': hasattr,
-            'hash': hash,
-            'int': int,
-            'isinstance': isinstance,
-            'issubclass': issubclass,
-            'iter': iter,
-            'len': len,
-            'list': list,
-            'map': map,
-            'max': max,
-            'min': min,
-            'next': next,
-            'object': object,
-            'pow': pow,
-            'print': print,
-            'range': range,
-            'reversed': reversed,
-            'round': round,
-            'set': set,
-            'slice': slice,
-            'sorted': sorted,
-            'str': str,
-            'sum': sum,
-            'tuple': tuple,
-            'type': type,
-            'zip': zip,
-            'Exception': Exception,
-            'ValueError': ValueError,
-            'TypeError': TypeError,
-            'KeyError': KeyError,
-            'IndexError': IndexError,
-            'AttributeError': AttributeError,
-            'RuntimeError': RuntimeError,
+            "True": True,
+            "False": False,
+            "None": None,
+            "abs": abs,
+            "all": all,
+            "any": any,
+            "bool": bool,
+            "dict": dict,
+            "enumerate": enumerate,
+            "filter": filter,
+            "float": float,
+            "frozenset": frozenset,
+            "hasattr": hasattr,
+            "hash": hash,
+            "int": int,
+            "isinstance": isinstance,
+            "issubclass": issubclass,
+            "iter": iter,
+            "len": len,
+            "list": list,
+            "map": map,
+            "max": max,
+            "min": min,
+            "next": next,
+            "object": object,
+            "pow": pow,
+            "print": print,
+            "range": range,
+            "reversed": reversed,
+            "round": round,
+            "set": set,
+            "slice": slice,
+            "sorted": sorted,
+            "str": str,
+            "sum": sum,
+            "tuple": tuple,
+            "type": type,
+            "zip": zip,
+            "Exception": Exception,
+            "ValueError": ValueError,
+            "TypeError": TypeError,
+            "KeyError": KeyError,
+            "IndexError": IndexError,
+            "AttributeError": AttributeError,
+            "RuntimeError": RuntimeError,
         }
 
-        return {'__builtins__': safe_builtins}
+        return {"__builtins__": safe_builtins}
 
     def _verify_signature(self) -> bool:
         """验证 skill 签名（可选功能）"""
@@ -304,10 +337,10 @@ class Skill:
             # 计算文件哈希
             hasher = hashlib.sha256()
 
-            for file_name in ['skill.json', 'tools.py', 'prompts.py']:
+            for file_name in ["skill.json", "tools.py", "prompts.py"]:
                 file_path = self.dir / file_name
                 if file_path.exists():
-                    with open(file_path, 'rb') as f:
+                    with open(file_path, "rb") as f:
                         hasher.update(file_path.name.encode())
                         hasher.update(f.read())
 
@@ -318,16 +351,14 @@ class Skill:
                 stored_hash = f.read().strip()
 
             if computed_hash != stored_hash:
-                raise SecurityError(
-                    f"Signature verification failed for skill: {self.name}"
-                )
+                raise SecurityError(f"Signature verification failed for skill: {self.name}")
 
             logger.info(f"Signature verified for skill: {self.name}")
             return True
 
         except Exception as e:
             logger.error(f"Signature verification error: {e}")
-            raise SecurityError(f"Signature verification failed: {e}")
+            raise SecurityError(f"Signature verification failed: {e}") from e
 
     @property
     def name(self) -> str:
@@ -344,10 +375,22 @@ class Skill:
 
 # 保留名称黑名单
 RESERVED_NAMES: set[str] = {
-    'test', 'tmp', 'temp', 'skill', 'skills',
-    'kuma-claw', 'kuma_claw', '__pycache__',
-    'con', 'prn', 'aux', 'nul',  # Windows 保留名
-    'admin', 'root', 'system', 'default',
+    "test",
+    "tmp",
+    "temp",
+    "skill",
+    "skills",
+    "kuma-claw",
+    "kuma_claw",
+    "__pycache__",
+    "con",
+    "prn",
+    "aux",
+    "nul",  # Windows 保留名
+    "admin",
+    "root",
+    "system",
+    "default",
 }
 
 
@@ -374,10 +417,10 @@ def validate_skill_name(skill_name: str) -> tuple[bool, str]:
     if not re.match(r"^[a-z0-9-]+$", skill_name):
         return False, "只能包含小写字母、数字和连字符"
 
-    if skill_name.startswith('-') or skill_name.endswith('-'):
+    if skill_name.startswith("-") or skill_name.endswith("-"):
         return False, "不能以连字符开头或结尾"
 
-    if '--' in skill_name:
+    if "--" in skill_name:
         return False, "不能包含连续的连字符"
 
     if skill_name in RESERVED_NAMES:
@@ -392,7 +435,8 @@ def validate_skill_name(skill_name: str) -> tuple[bool, str]:
 def validate_version(version: str) -> bool:
     """验证版本号格式（semver）"""
     import re
-    pattern = r'^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$'
+
+    pattern = r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
     return bool(re.match(pattern, version))
 
 
@@ -423,6 +467,7 @@ def validate_path_safe(path: Path, allowed_dirs: list[Path]) -> bool:
 # SkillManager
 # ============================================
 
+
 class SkillManager:
     """Skill 管理器（安全增强版）"""
 
@@ -430,7 +475,7 @@ class SkillManager:
         self,
         skills_dir: Path | None = None,
         verify_signatures: bool = False,
-        allowed_output_dirs: list[Path] | None = None
+        allowed_output_dirs: list[Path] | None = None,
     ):
         self.skills_dir = (skills_dir or Path(__file__).parent).resolve()
         self.verify_signatures = verify_signatures
@@ -456,7 +501,7 @@ class SkillManager:
                 continue
 
             # 跳过隐藏目录和特殊目录
-            if skill_dir.name.startswith('.') or skill_dir.name.startswith('__'):
+            if skill_dir.name.startswith(".") or skill_dir.name.startswith("__"):
                 continue
 
             skill_json = skill_dir / "skill.json"
@@ -551,7 +596,7 @@ class SkillManager:
         Returns:
             注册的工具数量
         """
-        if not hasattr(agent, 'tools'):
+        if not hasattr(agent, "tools"):
             logger.warning("Agent 没有 tools 属性，无法注册")
             return 0
 
@@ -564,18 +609,18 @@ class SkillManager:
         # 获取现有工具（避免重复）
         existing_tool_names = set()
         for tool in agent.tools:
-            if hasattr(tool, 'name'):
+            if hasattr(tool, "name"):
                 existing_tool_names.add(tool.name)
-            elif hasattr(tool, 'func') and hasattr(tool.func, '__name__'):
+            elif hasattr(tool, "func") and hasattr(tool.func, "__name__"):
                 existing_tool_names.add(tool.func.__name__)
 
         # 过滤已存在的工具
         new_tools = []
         for tool in skill_tools:
             tool_name = None
-            if hasattr(tool, 'name'):
+            if hasattr(tool, "name"):
                 tool_name = tool.name
-            elif hasattr(tool, 'func') and hasattr(tool.func, '__name__'):
+            elif hasattr(tool, "func") and hasattr(tool.func, "__name__"):
                 tool_name = tool.func.__name__
 
             if tool_name and tool_name not in existing_tool_names:
@@ -588,8 +633,8 @@ class SkillManager:
             logger.info(f"注册了 {len(new_tools)} 个 Skill 工具到 Agent")
 
             for tool in new_tools:
-                tool_name = getattr(tool, 'name', None)
-                if not tool_name and hasattr(tool, 'func') and hasattr(tool.func, '__name__'):
+                tool_name = getattr(tool, "name", None)
+                if not tool_name and hasattr(tool, "func") and hasattr(tool.func, "__name__"):
                     tool_name = tool.func.__name__
                 logger.debug(f"  - {tool_name}")
 
@@ -604,7 +649,7 @@ class SkillManager:
         Returns:
             是否成功
         """
-        if not hasattr(agent, 'instruction'):
+        if not hasattr(agent, "instruction"):
             logger.warning("Agent 没有 instruction 属性，无法注入")
             return False
 

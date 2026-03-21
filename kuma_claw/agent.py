@@ -130,8 +130,7 @@ def web_search(query: str, limit: int = 5) -> str:
             return f"没有找到关于 '{query}' 的搜索结果。"
 
         return "\n\n".join(
-            f"标题：{r.get('title')}\n内容：{r.get('body')}\n链接：{r.get('href')}"
-            for r in results
+            f"标题：{r.get('title')}\n内容：{r.get('body')}\n链接：{r.get('href')}" for r in results
         )
     except ImportError:
         return "❌ 搜索功能不可用：pip install duckduckgo-search"

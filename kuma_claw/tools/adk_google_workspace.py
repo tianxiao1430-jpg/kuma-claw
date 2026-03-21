@@ -22,6 +22,7 @@ try:
         SheetsToolset,
         YoutubeToolset,
     )
+
     ADK_TOOLSETS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"ADK GoogleApiToolset 不可用: {e}")
@@ -98,8 +99,7 @@ def _create_toolset(
 
 
 def create_gmail_toolset(
-    tool_filter: list[str] | None = None,
-    tool_name_prefix: str = "gmail"
+    tool_filter: list[str] | None = None, tool_name_prefix: str = "gmail"
 ) -> BaseToolset | None:
     """创建 Gmail 工具集
 
@@ -119,8 +119,7 @@ def create_gmail_toolset(
 
 
 def create_calendar_toolset(
-    tool_filter: list[str] | None = None,
-    tool_name_prefix: str = "calendar"
+    tool_filter: list[str] | None = None, tool_name_prefix: str = "calendar"
 ) -> BaseToolset | None:
     """创建 Calendar 工具集"""
     return _create_toolset(
@@ -132,8 +131,7 @@ def create_calendar_toolset(
 
 
 def create_sheets_toolset(
-    tool_filter: list[str] | None = None,
-    tool_name_prefix: str = "sheets"
+    tool_filter: list[str] | None = None, tool_name_prefix: str = "sheets"
 ) -> BaseToolset | None:
     """创建 Sheets 工具集"""
     return _create_toolset(
@@ -145,8 +143,7 @@ def create_sheets_toolset(
 
 
 def create_docs_toolset(
-    tool_filter: list[str] | None = None,
-    tool_name_prefix: str = "docs"
+    tool_filter: list[str] | None = None, tool_name_prefix: str = "docs"
 ) -> BaseToolset | None:
     """创建 Docs 工具集"""
     return _create_toolset(

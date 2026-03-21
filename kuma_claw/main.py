@@ -13,10 +13,7 @@ import time
 from .config import config
 
 # 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(message)s")
 logger = logging.getLogger("kuma_claw")
 
 
@@ -102,11 +99,7 @@ def main():
     if args.web or args.all:
         from .web_ui import start_web_ui
 
-        web_thread = threading.Thread(
-            target=start_web_ui,
-            kwargs={"port": args.port},
-            daemon=True
-        )
+        web_thread = threading.Thread(target=start_web_ui, kwargs={"port": args.port}, daemon=True)
         web_thread.start()
         print(f"🌐 Web UI: http://localhost:{args.port}")
 
@@ -124,7 +117,7 @@ def main():
                 slack_channel = create_slack_channel(
                     agent=agent,
                     bot_token=config.get_slack_bot_token(),
-                    app_token=config.get_slack_app_token()
+                    app_token=config.get_slack_app_token(),
                 )
                 tasks.append(slack_channel.start())
                 print("💬 Slack Bot 已就绪")

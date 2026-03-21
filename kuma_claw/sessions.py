@@ -33,7 +33,7 @@ class SQLiteSessionService:
 
     def _get_conn(self) -> sqlite3.Connection:
         """获取线程本地连接"""
-        if not hasattr(self._local, 'conn') or self._local.conn is None:
+        if not hasattr(self._local, "conn") or self._local.conn is None:
             self._local.conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self._local.conn.row_factory = sqlite3.Row
             self._local.conn.execute("PRAGMA journal_mode=WAL")
@@ -58,9 +58,11 @@ class SQLiteSessionService:
         conn.commit()
 
     async def create_session(
-        self, app_name: str, user_id: str,
+        self,
+        app_name: str,
+        user_id: str,
         state: dict[str, Any] | None = None,
-        session_id: str | None = None
+        session_id: str | None = None,
     ) -> Session:
         """创建会话"""
         session_id = session_id or str(uuid.uuid4())
@@ -71,33 +73,47 @@ class SQLiteSessionService:
             self._get_conn().execute(
                 "INSERT INTO sessions (id, user_id, app_name, state, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                (session_id, user_id, app_name, json.dumps(state), now, now)
+                (session_id, user_id, app_name, json.dumps(state), now, now),
             )
             self._get_conn().commit()
 
         logger.debug(f"创建会话：id={session_id}")
-        return Session(id=session_id, app_name=app_name, user_id=user_id,
-                      state=state, created_at=now, updated_at=now)
+        return Session(
+            id=session_id,
+            app_name=app_name,
+            user_id=user_id,
+            state=state,
+            created_at=now,
+            updated_at=now,
+        )
 
     async def get_session(self, app_name: str, user_id: str, session_id: str) -> Session | None:
         """获取会话"""
         with self._lock:
-            row = self._get_conn().execute(
-                "SELECT * FROM sessions WHERE id = ? AND app_name = ? AND user_id = ?",
-                (session_id, app_name, user_id)
-            ).fetchone()
+            row = (
+                self._get_conn()
+                .execute(
+                    "SELECT * FROM sessions WHERE id = ? AND app_name = ? AND user_id = ?",
+                    (session_id, app_name, user_id),
+                )
+                .fetchone()
+            )
 
         if not row:
             return None
 
         return Session(
-            id=row["id"], app_name=row["app_name"], user_id=row["user_id"],
-            state=json.loads(row["state"]), created_at=row["created_at"],
-            updated_at=row["updated_at"]
+            id=row["id"],
+            app_name=row["app_name"],
+            user_id=row["user_id"],
+            state=json.loads(row["state"]),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )
 
-    async def update_session(self, app_name: str, user_id: str,
-                            session_id: str, state: dict[str, Any]) -> Session:
+    async def update_session(
+        self, app_name: str, user_id: str, session_id: str, state: dict[str, Any]
+    ) -> Session:
         """更新会话"""
         now = datetime.utcnow().isoformat()
 
@@ -105,19 +121,25 @@ class SQLiteSessionService:
             self._get_conn().execute(
                 "UPDATE sessions SET state = ?, updated_at = ? "
                 "WHERE id = ? AND app_name = ? AND user_id = ?",
-                (json.dumps(state), now, session_id, app_name, user_id)
+                (json.dumps(state), now, session_id, app_name, user_id),
             )
             self._get_conn().commit()
 
-        return Session(id=session_id, app_name=app_name, user_id=user_id,
-                      state=state, created_at=now, updated_at=now)
+        return Session(
+            id=session_id,
+            app_name=app_name,
+            user_id=user_id,
+            state=state,
+            created_at=now,
+            updated_at=now,
+        )
 
     async def delete_session(self, app_name: str, user_id: str, session_id: str) -> bool:
         """删除会话"""
         with self._lock:
             cursor = self._get_conn().execute(
                 "DELETE FROM sessions WHERE id = ? AND app_name = ? AND user_id = ?",
-                (session_id, app_name, user_id)
+                (session_id, app_name, user_id),
             )
             self._get_conn().commit()
 
@@ -129,22 +151,31 @@ class SQLiteSessionService:
     async def list_sessions(self, app_name: str, user_id: str) -> list[Session]:
         """列出会话"""
         with self._lock:
-            rows = self._get_conn().execute(
-                "SELECT * FROM sessions WHERE app_name = ? AND user_id = ? "
-                "ORDER BY updated_at DESC",
-                (app_name, user_id)
-            ).fetchall()
+            rows = (
+                self._get_conn()
+                .execute(
+                    "SELECT * FROM sessions WHERE app_name = ? AND user_id = ? "
+                    "ORDER BY updated_at DESC",
+                    (app_name, user_id),
+                )
+                .fetchall()
+            )
 
         return [
-            Session(id=r["id"], app_name=r["app_name"], user_id=r["user_id"],
-                   state=json.loads(r["state"]), created_at=r["created_at"],
-                   updated_at=r["updated_at"])
+            Session(
+                id=r["id"],
+                app_name=r["app_name"],
+                user_id=r["user_id"],
+                state=json.loads(r["state"]),
+                created_at=r["created_at"],
+                updated_at=r["updated_at"],
+            )
             for r in rows
         ]
 
     async def close(self):
         """关闭连接"""
-        if hasattr(self._local, 'conn') and self._local.conn:
+        if hasattr(self._local, "conn") and self._local.conn:
             self._local.conn.close()
             self._local.conn = None
         logger.info("SQLite 会话服务已关闭")

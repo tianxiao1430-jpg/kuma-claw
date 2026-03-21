@@ -1,4 +1,5 @@
 """记忆系统测试"""
+
 import pytest
 
 from kuma_claw.memory import MemoryManager, MemoryStore
@@ -8,6 +9,7 @@ from kuma_claw.memory import MemoryManager, MemoryStore
 def memory_manager():
     """创建测试用记忆管理器"""
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = f"{tmpdir}/test_memory.db"
         store = MemoryStore(db_path=db_path)

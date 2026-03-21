@@ -21,6 +21,7 @@ logger = logging.getLogger("kuma_claw.channels")
 # 会话管理
 # ============================================
 
+
 class SessionManager:
     """统一的会话管理器（使用 SQLite 持久化）"""
 
@@ -29,11 +30,7 @@ class SessionManager:
         self.session_service = SQLiteSessionService(db_path=db_path)
         self.user_sessions: dict[str, str] = {}  # session_key -> session_id
 
-    async def get_or_create_session(
-        self,
-        user_id: str,
-        session_key: str | None = None
-    ) -> str:
+    async def get_or_create_session(self, user_id: str, session_key: str | None = None) -> str:
         """获取或创建会话
 
         Args:
@@ -51,9 +48,7 @@ class SessionManager:
         if key not in self.user_sessions:
             try:
                 session = await self.session_service.create_session(
-                    app_name=self.app_name,
-                    user_id=user_id,
-                    state={}
+                    app_name=self.app_name, user_id=user_id, state={}
                 )
 
                 # 获取 session id
@@ -83,9 +78,7 @@ class SessionManager:
             session_id = self.user_sessions[key]
             try:
                 await self.session_service.delete_session(
-                    app_name=self.app_name,
-                    user_id=user_id,
-                    session_id=session_id
+                    app_name=self.app_name, user_id=user_id, session_id=session_id
                 )
                 del self.user_sessions[key]
                 logger.debug(f"清除会话: key={key}")
@@ -104,8 +97,10 @@ class SessionManager:
 # Agent 运行器
 # ============================================
 
+
 class LLMAPIError(Exception):
     """LLM API 调用异常"""
+
     pass
 
 
@@ -113,7 +108,7 @@ class LLMAPIError(Exception):
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type((LLMAPIError, TimeoutError)),
-    reraise=True
+    reraise=True,
 )
 async def run_agent_with_session(
     runner: Runner,
@@ -139,20 +134,12 @@ async def run_agent_with_session(
     """
     try:
         session_id = await session_manager.get_or_create_session(
-            user_id=user_id,
-            session_key=session_key
+            user_id=user_id, session_key=session_key
         )
 
-        content = types.Content(
-            role="user",
-            parts=parts
-        )
+        content = types.Content(role="user", parts=parts)
 
-        events = runner.run_async(
-            session_id=session_id,
-            user_id=user_id,
-            new_message=content
-        )
+        events = runner.run_async(session_id=session_id, user_id=user_id, new_message=content)
 
         response_text = ""
         async for event in events:
@@ -217,6 +204,7 @@ async def run_agent_with_session_fallback(
 # 渠道基类
 # ============================================
 
+
 class ChannelHandler(ABC):
     """渠道处理器基类"""
 
@@ -263,7 +251,7 @@ class ChannelHandler(ABC):
         user_id: str,
         text: str,
         images: list[tuple[bytes, str]] | None = None,
-        session_key: str | None = None
+        session_key: str | None = None,
     ) -> str:
         """运行 Agent(公共逻辑)
 
@@ -287,12 +275,9 @@ class ChannelHandler(ABC):
                     logger.warning(f"图片数据类型错误: {type(img_bytes)}, 跳过")
                     continue
 
-                parts.append(types.Part(
-                    inline_data=types.Blob(
-                        mime_type=mime_type,
-                        data=img_bytes
-                    )
-                ))
+                parts.append(
+                    types.Part(inline_data=types.Blob(mime_type=mime_type, data=img_bytes))
+                )
 
         return await run_agent_with_session_fallback(
             runner=self.runner,

@@ -29,10 +29,22 @@ try:
 except ImportError:
     # 本地定义（fallback）
     RESERVED_NAMES = {
-        'test', 'tmp', 'temp', 'skill', 'skills',
-        'kuma-claw', 'kuma_claw', '__pycache__',
-        'con', 'prn', 'aux', 'nul',
-        'admin', 'root', 'system', 'default',
+        "test",
+        "tmp",
+        "temp",
+        "skill",
+        "skills",
+        "kuma-claw",
+        "kuma_claw",
+        "__pycache__",
+        "con",
+        "prn",
+        "aux",
+        "nul",
+        "admin",
+        "root",
+        "system",
+        "default",
     }
 
     def validate_skill_name(skill_name: str) -> tuple[bool, str]:
@@ -44,14 +56,14 @@ except ImportError:
             return False, "Skill 名称最多 64 字符"
         if not re.match(r"^[a-z0-9-]+$", skill_name):
             return False, "只能包含小写字母、数字和连字符"
-        if skill_name.startswith('-') or skill_name.endswith('-'):
+        if skill_name.startswith("-") or skill_name.endswith("-"):
             return False, "不能以连字符开头或结尾"
         if skill_name in RESERVED_NAMES:
             return False, f"'{skill_name}' 是保留名称"
         return True, "Valid"
 
     def validate_version(version: str) -> bool:
-        return bool(re.match(r'^\d+\.\d+\.\d+$', version))
+        return bool(re.match(r"^\d+\.\d+\.\d+$", version))
 
     def validate_path_safe(path: Path, allowed_dirs: list[Path]) -> bool:
         try:
@@ -84,6 +96,7 @@ MAX_FILE_SIZE = 1 * 1024 * 1024  # 1MB
 # ============================================
 # 工具函数
 # ============================================
+
 
 def init_skill(skill_name: str, skills_dir: str = "kuma_claw/skills") -> str:
     """初始化新 skill 的目录结构和文件
@@ -206,8 +219,8 @@ EXAMPLES = [
         with open(init_path, "w", encoding="utf-8") as f:
             f.write(
                 f'"""{skill_name} skill"""\n'
-                f'from .tools import TOOLS\n'
-                f'from .prompts import SYSTEM_PROMPT, EXAMPLES\n'
+                f"from .tools import TOOLS\n"
+                f"from .prompts import SYSTEM_PROMPT, EXAMPLES\n"
             )
 
         return f"""✅ Skill '{skill_name}' 初始化成功
@@ -361,7 +374,9 @@ def validate_skill(skill_name: str, skills_dir: str = "kuma_claw/skills") -> str
             file_count = sum(1 for f in skill_path.rglob("*") if f.is_file())
 
             if total_size > MAX_SKILL_SIZE:
-                warnings.append(f"Skill 总大小 {total_size // 1024 // 1024}MB 超过建议值 {MAX_SKILL_SIZE // 1024 // 1024}MB")
+                warnings.append(
+                    f"Skill 总大小 {total_size // 1024 // 1024}MB 超过建议值 {MAX_SKILL_SIZE // 1024 // 1024}MB"
+                )
 
             if file_count > MAX_FILES_COUNT:
                 warnings.append(f"文件数量 {file_count} 超过建议值 {MAX_FILES_COUNT}")
@@ -398,7 +413,7 @@ def package_skill(
     skill_name: str,
     output_dir: str = ".",
     skills_dir: str = "kuma_claw/skills",
-    allowed_dirs: list[str] | None = None
+    allowed_dirs: list[str] | None = None,
 ) -> str:
     """打包 skill 为 .skill 文件
 
@@ -498,12 +513,7 @@ def package_skill(
                 output_file.unlink()
 
             # 15. 打包
-            shutil.make_archive(
-                str(output_file.with_suffix("")),
-                "zip",
-                tmpdir,
-                skill_name
-            )
+            shutil.make_archive(str(output_file.with_suffix("")), "zip", tmpdir, skill_name)
 
             # 16. 重命名为 .skill
             zip_path = output_file.with_suffix(".zip")

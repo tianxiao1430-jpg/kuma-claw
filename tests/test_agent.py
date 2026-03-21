@@ -17,11 +17,11 @@ class TestAgentTools:
         assert len(result) > 0
         # 格式：YYYY-MM-DD HH:MM:SS
         assert len(result) == 19
-        assert result[4] == '-'
-        assert result[7] == '-'
-        assert result[10] == ' '
-        assert result[13] == ':'
-        assert result[16] == ':'
+        assert result[4] == "-"
+        assert result[7] == "-"
+        assert result[10] == " "
+        assert result[13] == ":"
+        assert result[16] == ":"
 
     def test_echo_message(self, sample_text):
         """测试回显消息"""
