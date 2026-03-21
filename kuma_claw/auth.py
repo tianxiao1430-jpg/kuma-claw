@@ -210,8 +210,9 @@ class OAuthFlow:
                         self.send_header("Content-type", "text/html")
                         self.end_headers()
                         self.wfile.write(
-                            b"<html><body><h1>✅ 授权成功！</h1>"
-                            b"<p>您可以关闭此页面，返回 CLI 继续操作。</p></body></html>"
+                            "<html><body><h1>✅ 授权成功！</h1>"
+                            "<p>您可以关闭此页面，返回 CLI 继续操作。</p></body></html>"
+                            .encode("utf-8")
                         )
                     elif "error" in params:
                         callback_received["error"] = params["error"]
@@ -220,7 +221,8 @@ class OAuthFlow:
                         self.end_headers()
                         error_msg = params["error"].encode("utf-8")
                         self.wfile.write(
-                            b"<html><body><h1>❌ 授权失败</h1><p>Error: %s</p></body></html>" % error_msg
+                            "<html><body><h1>❌ 授权失败</h1><p>Error: %s</p></body></html>"
+                            .encode("utf-8") % error_msg
                         )
                     else:
                         self.send_response(400)
