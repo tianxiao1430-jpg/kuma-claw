@@ -174,6 +174,42 @@ class SQLiteSessionService(BaseSessionService):
         ]
         return ListSessionsResponse(sessions=sessions)
 
+    async def update_session(
+        self,
+        *,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        state: dict[str, Any],
+    ):
+        """更新会话状态（ADK 调用此方法保存对话历史）"""
+        now_iso = datetime.utcnow().isoformat()
+        now_ts = datetime.utcnow().timestamp()
+        
+        with self._lock:
+            cursor = self._get_conn().execute(
+                """
+                UPDATE sessions 
+                SET state = ?, updated_at = ?
+                WHERE id = ? AND app_name = ? AND user_id = ?
+                """,
+                (json.dumps(state), now_iso, session_id, app_name, user_id),
+            )
+            self._get_conn().commit()
+        
+        if cursor.rowcount == 0:
+            logger.warning(f"更新会话失败：id={session_id} (不存在)")
+            return None
+        
+        logger.debug(f"更新会话：id={session_id}, state={state}")
+        return Session(
+            id=session_id,
+            app_name=app_name,
+            user_id=user_id,
+            state=state,
+            last_update_time=now_ts,
+        )
+
     async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
         """删除会话"""
         with self._lock:
