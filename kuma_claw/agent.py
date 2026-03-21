@@ -142,7 +142,7 @@ def get_memory_stats() -> str:
 def web_search(query: str, limit: int = 5) -> str:
     """通过 DuckDuckGo 搜索网络获取实时信息"""
     try:
-        from ddgs import DDGS
+        from duckduckgo_search import DDGS
         with DDGS() as ddgs:
             results_raw = ddgs.text(query, max_results=limit)
         results = [
