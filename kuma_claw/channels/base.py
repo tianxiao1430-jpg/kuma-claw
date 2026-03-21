@@ -254,6 +254,14 @@ class ChannelHandler(ABC):
             logger.error(f"动态工具注入失败：{e}")
         # -----------------------
 
+
+        # --- 记录会话到记忆库 (SQLite) ---
+        try:
+            from ..memory import memory_manager
+            memory_manager.add_session_message(user_id, "user", text)
+        except Exception as e:
+            logger.error(f"记录用户消息失败: {e}")
+        # ------------------------------
         parts = [types.Part(text=text)]
 
         # 添加图片(如果有)
@@ -267,13 +275,25 @@ class ChannelHandler(ABC):
                     types.Part(inline_data=types.Blob(mime_type=mime_type, data=img_bytes))
                 )
 
-        return await run_agent_with_session_fallback(
+
+        response = await run_agent_with_session_fallback(
             runner=self.runner,
             session_manager=self.session_manager,
             user_id=user_id,
             parts=parts,
             session_key=session_key,
         )
+
+        # --- 记录响应到记忆库 (SQLite) ---
+        try:
+            from ..memory import memory_manager
+            memory_manager.add_session_message(user_id, "assistant", response)
+        except Exception as e:
+            logger.error(f"记录助手响应失败: {e}")
+        # ------------------------------
+
+        return response
+
 
     async def cleanup(self):
         """清理资源(在应用关闭时调用)"""
