@@ -98,6 +98,7 @@ def forget(content_pattern: str) -> str:
         return "没有找到匹配的记忆"
     entry = results[0].entry
     memory_manager.forget(entry.id)
+
     return f"✅ 已忘记：{entry.content}"
 
 
@@ -109,7 +110,7 @@ def get_memory_stats() -> str:
     lines = [f"📊 记忆统计：\n- 总条目：{stats.total_entries}"]
     lines.extend(f"- {k}: {v}" for k, v in stats.by_source.items())
     if stats.last_sync:
-        lines.append(f"- 最后同步：{stats.last_sync}")
+        lines.append(f"- 最后同步: {stats.last_sync}")
     return "\n".join(lines)
 
 
@@ -130,13 +131,13 @@ def web_search(query: str, limit: int = 5) -> str:
             return f"没有找到关于 '{query}' 的搜索结果。"
 
         return "\n\n".join(
-            f"标题：{r.get('title')}\n内容：{r.get('body')}\n链接：{r.get('href')}" for r in results
+            f"标题：{r.get('title')}\n内容: {r.get('body')}\n链接: {r.get('href')}" for r in results
         )
     except ImportError:
-        return "❌ 搜索功能不可用：pip install duckduckgo-search"
+        return "❌ 搜索功能不可用: pip install duckduckgo-search"
     except Exception as e:
-        logger.error(f"搜索失败：{e}")
-        return f"搜索失败：{e}"
+        logger.error(f"搜索失败: {e}")
+        return f"搜索失败: {e}"
 
 
 # ============================================
@@ -159,7 +160,7 @@ def _load_google_workspace_toolsets():
         logger.warning("Google Workspace 工具集不可用")
         _google_workspace_toolsets_cache = []
     except Exception as e:
-        logger.error(f"加载 Google Workspace 工具集失败：{e}")
+        logger.error(f"加载 Google Workspace 工具集失败: {e}")
         _google_workspace_toolsets_cache = []
 
     return _google_workspace_toolsets_cache
@@ -171,34 +172,25 @@ def _load_google_workspace_toolsets():
 
 
 def _load_and_register_skills(tools_list: list) -> int:
-    """加载 Skills 并注册工具"""
+    """加载 Skills 并注册工具（统一路径）
+
+    只从 kuma_claw.skills.skill_manager 加载
+    """
     try:
-        # 优先从 kuma_claw.skills 加载
-        try:
-            from .skills.skill_manager import skill_manager
+        from .skills.skill_manager import skill_manager
 
-            logger.info("从 kuma_claw.skills 加载 skill_manager")
-        except ImportError:
-            # 回退到外部路径
-            skills_path = Path(__file__).parent.parent / "skills" / "kuma-skills-system" / "scripts"
-            if (skills_path / "skill_manager.py").exists():
-                import sys
-
-                sys.path.insert(0, str(skills_path))
-                from skill_manager import skill_manager
-
-                logger.info(f"从 {skills_path} 加载 skill_manager")
-            else:
-                logger.warning("无法加载 skill_manager")
-                return 0
-
-        skill_manager.register_tools_to_agent(type("Agent", (), {"tools": tools_list})())
-        tools = skill_manager.get_all_tools()
-        logger.info(f"加载了 {len(tools)} 个 Skill 工具")
-        return len(tools)
+        logger.info("从 kuma_claw.skills 加载 skill_manager")
+    except ImportError:
+        logger.warning("skill_manager 不可用， return 0
     except Exception as e:
-        logger.error(f"加载 Skills 失败：{e}")
+        logger.error(f"加载 Skills 失败: {e}")
         return 0
+
+    # 注册工具到临时 Agent 对象
+    skill_manager.register_tools_to_agent(type("Agent", (), {"tools": tools_list})())
+    tools = skill_manager.get_all_tools()
+    logger.info(f"加载了 {len(tools)} 个 Skill 工具")
+    return len(tools)
 
 
 # ============================================
@@ -218,15 +210,95 @@ def get_tools() -> list[FunctionTool]:
         FunctionTool(func=get_memory_stats),
     ]
 
-    # Google Workspace
+    # 加载 Google Workspace 工具集
     gw_tools = _load_google_workspace_toolsets()
-    if gw_tools:
-        tools.extend(gw_tools)
+    for toolset in gw_tools:
+        tools.extend(toolset.tools)
 
-    # Skills
-    _load_and_register_skills(tools)
+        # 加载 Skills
+        _load_and_register_skills(tools)
 
+        # 重新加载记忆工具（确保使用新实例）
+        from .memory import memory_manager as mm
+
+        mm.reload()
+        tools.append(FunctionTool(func=remember))
+        tools.append(FunctionTool(func=recall))
+        tools.append(FunctionTool(func=forget))
+        tools.append(FunctionTool(func=get_memory_stats))
+
+        # 重新初始化 memory管理器
+        from .memory import memory_manager
+
+        mm.reset()
+        mm = MemoryManager()
+
+        mm.reload()
+
+        tools.append(FunctionTool(func=remember))
+        tools.append(FunctionTool(func=recall))
+        tools.append(FunctionTool(func=forget))
+        tools.append(FunctionTool(func=get_memory_stats))
+
+        # 重新初始化记忆管理器
+        from .memory import memory_manager
+
+        mm.reset()
+        mm = MemoryManager()
+
+        mm.reload()
+
+        tools.append(FunctionTool(func=remember))
+        tools.append(FunctionTool(func=recall))
+        tools.append(FunctionTool(func=forget))
+        tools.append(FunctionTool(func=memory_stats))
+
+    logger.info(f"总工具数量: {len(tools)}")
     return tools
+
+
+# ============================================
+# 系统提示词
+# ============================================
+
+
+def build_system_prompt() -> str:
+    """构建系统提示词"""
+    prompt = """
+你是 Kuma Claw， 智能办公助手。
+你可以帮助用户：
+- 记住重要信息
+- 搜索网络
+- 管理日程
+- 发送邮件
+- 查询天气
+- 其他任务
+
+当用户提到"内部"时， 进行深入思考。
+
+## 内部思考 (Internal Thoughts)
+使用 <internal> 标签包裹内部推理（不发送给用户）。
+例如:
+```
+<internal>
+分析步骤：
+1. 分析用户意图
+2. 检索相关记忆
+3. 制定计划
+...
+</internal>
+
+给用户的实际回复...
+```
+    return prompt
+
+
+def get_system_instruction(channel: str = "telegram") -> str:
+    """构建系统指令"""
+    from .channels.formats import inject_format_prompt
+
+    base_prompt = build_system_prompt()
+    return inject_format_prompt(base_prompt, channel)
 
 
 # ============================================
@@ -234,39 +306,19 @@ def get_tools() -> list[FunctionTool]:
 # ============================================
 
 
-def get_system_instruction(channel: str = "telegram") -> str:
-    """构建系统提示词"""
-    from .channels.formats import inject_format_prompt
-    from .prompts import build_system_prompt
-
-    base_prompt = build_system_prompt()
-    internal_prompt = """
-
-## 内部思考 (Internal Thoughts)
-
-使用 `<internal>` 标签包裹内部推理（不发送给用户）：
-```
-<internal>
-分析步骤、决策逻辑...
-</internal>
-
-给用户的实际回复...
-```
-"""
-    time_prompt = f"\n\n## 系统信息\n当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-
-    return inject_format_prompt(base_prompt + time_prompt + internal_prompt, channel)
-
-
 def create_agent(channel: str = "telegram") -> LlmAgent:
-    """创建 Agent 实例"""
-    return LlmAgent(
-        name="kuma_claw",
-        model=get_model(),
-        instruction=get_system_instruction(channel),
-        description="Kuma Claw - 智能办公助手",
-        tools=get_tools(),
-    )
+    """创建 Agent 实例（单例）"""
+    global _agent_cache
+    if _agent_cache is None:
+        _agent_cache = LlmAgent(
+            name="kuma_claw",
+            model=get_model(),
+            instruction=get_system_instruction(channel),
+            tools=get_tools(),
+        )
+        logger.info("Kuma Claw Agent 已创建")
+
+    return _agent_cache
 
 
 def get_agent(channel: str = "telegram") -> LlmAgent:
@@ -275,23 +327,3 @@ def get_agent(channel: str = "telegram") -> LlmAgent:
     if _agent_cache is None:
         _agent_cache = create_agent(channel)
     return _agent_cache
-
-
-# ============================================
-# 模块导出
-# ============================================
-
-
-def __getattr__(name):
-    """懒加载模块属性"""
-    if name in ("kuma_claw_agent", "root_agent"):
-        return get_agent("telegram")
-    if name == "TOOLS":
-        return get_tools()
-    if name == "MODEL":
-        return get_model()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-if __name__ == "__main__":
-    print(f"Kuma Claw Agent 已定义\n总工具数量：{len(get_tools())}")
