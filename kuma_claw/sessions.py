@@ -13,12 +13,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from google.adk.sessions import (
-    BaseSessionService,
-    GetSessionConfig,
-    ListSessionsResponse,
-    Session,
-)
+from google.adk.sessions import BaseSessionService, Session
+
+try:
+    from google.adk.sessions import GetSessionConfig, ListSessionsResponse
+except ImportError:
+    # 兼容低版本的 google-adk
+    class GetSessionConfig:
+        pass
+
+    class ListSessionsResponse:
+        def __init__(self, sessions):
+            self.sessions = sessions
 
 logger = logging.getLogger("kuma_claw")
 
