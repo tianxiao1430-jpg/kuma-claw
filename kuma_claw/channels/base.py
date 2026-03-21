@@ -2,7 +2,7 @@
 Kuma Claw - 渠道基类
 ==================
 
-所有渠道的公共逻辑（会话管理、 Agent 运行）
+所有渠道的公共逻辑（会话管理、Agent 运行）
 支持基于输入动态注入工具
 """
 
@@ -38,7 +38,7 @@ class SessionManager:
         Args:
             user_id: 用户 ID
             session_key: 会话键（可选）
-                        - 格式: "{user_id}:{channel}:{thread_id}"
+                        - 格式："{user_id}:{channel}:{thread_id}"
                         - 不传则使用 user_id 作为键
 
         Returns:
@@ -48,17 +48,29 @@ class SessionManager:
         key = session_key or user_id
         if key not in self.user_sessions:
             try:
-                session = await self.session_service.create_session(
-                    app_name=self.app_name, user_id=user_id, state={}
+                # 先尝试从 SQLite 查找已有会话（支持 bot 重启后会话复用）
+                sessions_response = await self.session_service.list_sessions(
+                    app_name=self.app_name, user_id=user_id
                 )
-
-                # 获取 session id
-                session_id = session.id if hasattr(session, "id") else str(session)
-                self.user_sessions[key] = session_id
-                logger.debug(f"创建新会话： key={key}, session={session_id}")
+                existing_sessions = sessions_response.sessions if hasattr(sessions_response, 'sessions') else []
+                
+                if existing_sessions:
+                    # 复用最新的会话
+                    session = max(existing_sessions, key=lambda s: getattr(s, 'last_update_time', 0))
+                    session_id = session.id if hasattr(session, "id") else str(session)
+                    self.user_sessions[key] = session_id
+                    logger.debug(f"复用已有会话：key={key}, session={session_id}")
+                else:
+                    # 创建新会话
+                    session = await self.session_service.create_session(
+                        app_name=self.app_name, user_id=user_id, state={}
+                    )
+                    session_id = session.id if hasattr(session, "id") else str(session)
+                    self.user_sessions[key] = session_id
+                    logger.debug(f"创建新会话：key={key}, session={session_id}")
 
             except Exception as e:
-                logger.error(f"创建会话失败: {e}")
+                logger.error(f"获取/创建会话失败：{e}")
                 raise
         return self.user_sessions[key]
 
@@ -80,10 +92,10 @@ class SessionManager:
                     app_name=self.app_name, user_id=user_id, session_id=session_id
                 )
                 del self.user_sessions[key]
-                logger.debug(f"清除会话: key={key}")
+                logger.debug(f"清除会话：key={key}")
                 return True
             except Exception as e:
-                logger.error(f"清除会话失败: {e}")
+                logger.error(f"清除会话失败：{e}")
                 return False
         return False
 
@@ -136,8 +148,8 @@ async def run_agent_with_session(
             raise LLMAPIError("LLM 返回空响应")
         return response_text
     except Exception as e:
-        logger.error(f"运行 Agent 失败: {e}")
-        raise LLMAPIError(f"LLM API 调用失败: {str(e)}") from e
+        logger.error(f"运行 Agent 失败：{e}")
+        raise LLMAPIError(f"LLM API 调用失败：{str(e)}") from e
 
 
 async def run_agent_with_session_fallback(
@@ -149,7 +161,7 @@ async def run_agent_with_session_fallback(
 ) -> str:
     """运行 Agent 并返回响应（带重试和降级处理)
 
-    这是 run_agent_with_session 的包装器,在重试失败后返回友好的错误消息。
+    这是 run_agent_with_session 的包装器，在重试失败后返回友好的错误消息。
 
     Args:
         runner: ADK Runner 实例
@@ -173,8 +185,8 @@ async def run_agent_with_session_fallback(
         logger.error(f"LLM API 调用失败（重试耗尽): {e}")
         return "抱歉，服务暂时不可用，请稍后重试。"
     except Exception as e:
-        logger.error(f"运行 Agent 失败: {e}")
-        return f"处理请求时出错: {str(e)}"
+        logger.error(f"运行 Agent 失败：{e}")
+        return f"处理请求时出错：{str(e)}"
 
 
 # ============================================
@@ -197,11 +209,11 @@ class ChannelHandler(ABC):
             session_service=self.session_manager.session_service,
         )
 
-        logger.info(f"{channel_name} 渠道已初始化(使用 SQLite 持久化会话)")
+        logger.info(f"{channel_name} 渠道已初始化 (使用 SQLite 持久化会话)")
 
     @abstractmethod
     async def handle_message(self, user_id: str, text: str, **kwargs) -> str:
-        """处理消息(子类实现)
+        """处理消息 (子类实现)
 
         Args:
             user_id: 用户 ID
@@ -215,12 +227,12 @@ class ChannelHandler(ABC):
 
     @abstractmethod
     async def start(self):
-        """启动渠道(子类实现)"""
+        """启动渠道 (子类实现)"""
         pass
 
     @abstractmethod
     async def stop(self):
-        """停止渠道(子类实现)"""
+        """停止渠道 (子类实现)"""
         pass
 
     async def run_agent(
@@ -235,10 +247,10 @@ class ChannelHandler(ABC):
         Args:
             user_id: 用户 ID
             text: 消息文本
-            images: 图片列表, 格式为 [(bytes, mime_type), ...]
+            images: 图片列表，格式为 [(bytes, mime_type), ...]
             session_key: 会话键（可选)
                         - 用于隔离不同会话的上下文
-                        - 格式建议: "{user_id}:{channel}:{thread_id}"
+                        - 格式建议："{user_id}:{channel}:{thread_id}"
 
         Returns:
             Agent 响应
@@ -254,27 +266,50 @@ class ChannelHandler(ABC):
             logger.error(f"动态工具注入失败：{e}")
         # -----------------------
 
+        # 获取 session_id
+        session_id = await self.session_manager.get_or_create_session(
+            user_id=user_id, session_key=session_key
+        )
 
-        # --- 记录会话到记忆库 (SQLite) ---
+        # 从记忆库加载历史消息（bot 重启后恢复对话上下文）
+        history_context = ""
         try:
             from ..memory import memory_manager
-            memory_manager.add_session_message(user_id, "user", text)
+            history = memory_manager.get_session_messages(session_id, limit=10)
+            if history:
+                history_lines = []
+                for msg in history:
+                    role = "用户" if msg["role"] == "user" else "助手"
+                    history_lines.append(f"{role}: {msg['content']}")
+                history_context = "\n".join(history_lines)
+                logger.debug(f"加载了 {len(history)} 条历史消息")
         except Exception as e:
-            logger.error(f"记录用户消息失败: {e}")
-        # ------------------------------
-        parts = [types.Part(text=text)]
+            logger.error(f"加载历史消息失败：{e}")
 
-        # 添加图片(如果有)
+        # 构建消息 parts（如果有历史，作为上下文前置）
+        parts = []
+        if history_context:
+            parts.append(types.Part(text=f"以下是之前的对话历史：\n{history_context}\n\n---\n\n当前用户消息："))
+        parts.append(types.Part(text=text))
+
+        # 添加图片 (如果有)
         if images:
             for img_bytes, mime_type in images:
                 if not isinstance(img_bytes, bytes):
-                    logger.warning(f"图片数据类型错误: {type(img_bytes)}, 跳过")
+                    logger.warning(f"图片数据类型错误：{type(img_bytes)}, 跳过")
                     continue
 
                 parts.append(
                     types.Part(inline_data=types.Blob(mime_type=mime_type, data=img_bytes))
                 )
 
+        # --- 记录会话到记忆库 (SQLite) ---
+        try:
+            from ..memory import memory_manager
+            memory_manager.add_session_message(session_id, "user", text)
+        except Exception as e:
+            logger.error(f"记录用户消息失败：{e}")
+        # ------------------------------
 
         response = await run_agent_with_session_fallback(
             runner=self.runner,
@@ -287,14 +322,14 @@ class ChannelHandler(ABC):
         # --- 记录响应到记忆库 (SQLite) ---
         try:
             from ..memory import memory_manager
-            memory_manager.add_session_message(user_id, "assistant", response)
+            memory_manager.add_session_message(session_id, "assistant", response)
         except Exception as e:
-            logger.error(f"记录助手响应失败: {e}")
+            logger.error(f"记录助手响应失败：{e}")
         # ------------------------------
 
         return response
 
 
     async def cleanup(self):
-        """清理资源(在应用关闭时调用)"""
+        """清理资源 (在应用关闭时调用)"""
         await self.session_manager.close()
