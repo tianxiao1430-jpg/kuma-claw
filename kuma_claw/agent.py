@@ -166,12 +166,20 @@ def _load_google_workspace_toolsets():
 
 
 # ============================================
-# Skills 工具
+# Skills 工具 - 按需加载（基于触发词）
 # ============================================
 
 
-def _load_and_register_skills(tools_list: list) -> int:
-    """加载 Skills 并注册工具"""
+def _load_and_register_skills(tools_list: list, message_text: str | None = None) -> int:
+    """加载 Skills 并注册工具（支持按需加载）
+
+    Args:
+        tools_list: 工具列表
+        message_text: 用户消息文本（用于触发词匹配）
+
+    Returns:
+        加载的工具数量
+    """
     try:
         # 优先从 kuma_claw.skills 加载
         try:
@@ -192,10 +200,28 @@ def _load_and_register_skills(tools_list: list) -> int:
                 logger.warning("无法加载 skill_manager")
                 return 0
 
+        # 如果提供了消息文本，尝试按触发词匹配
+        if message_text:
+            matched_skill = skill_manager.get_skill_by_trigger(message_text)
+            if matched_skill:
+                # 按需加载：只注册匹配的技能工具
+                count = 0
+                for tool in matched_skill.tools:
+                    if tool not in tools_list:
+                        tools_list.append(tool)
+                        count += 1
+                logger.info(f"按需加载技能: {matched_skill.name} ({count} 个工具)")
+                return count
+            else:
+                logger.debug("没有匹配的技能触发词，跳过技能加载")
+                return 0
+
+        # 没有消息文本时，加载所有技能（兼容旧行为）
         skill_manager.register_tools_to_agent(type("Agent", (), {"tools": tools_list})())
         tools = skill_manager.get_all_tools()
         logger.info(f"加载了 {len(tools)} 个 Skill 工具")
         return len(tools)
+
     except Exception as e:
         logger.error(f"加载 Skills 失败：{e}")
         return 0
@@ -206,8 +232,12 @@ def _load_and_register_skills(tools_list: list) -> int:
 # ============================================
 
 
-def get_tools() -> list[FunctionTool]:
-    """获取工具列表"""
+def get_tools(message_text: str | None = None) -> list[FunctionTool]:
+    """获取工具列表（支持按需加载）
+
+    Args:
+        message_text: 用户消息文本（用于 Skill 触发词匹配）
+    """
     tools = [
         FunctionTool(func=web_search),
         FunctionTool(func=get_current_time),
@@ -223,8 +253,8 @@ def get_tools() -> list[FunctionTool]:
     if gw_tools:
         tools.extend(gw_tools)
 
-    # Skills
-    _load_and_register_skills(tools)
+    # Skills（按需加载）
+    _load_and_register_skills(tools, message_text)
 
     return tools
 
