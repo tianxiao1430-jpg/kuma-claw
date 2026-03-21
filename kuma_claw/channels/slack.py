@@ -3,17 +3,16 @@ Slack 渠道处理器
 ==================
 """
 
-import os
-import re
 import logging
-import httpx
-from typing import List, Tuple
-from slack_bolt.async_app import AsyncApp
-from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+import re
 
+import httpx
+from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+from slack_bolt.async_app import AsyncApp
+
+from ..service_registry import set_status
 from .base import ChannelHandler
 from .formats import extract_internal_content
-from ..service_registry import set_status
 
 logger = logging.getLogger("kuma_claw.channels.slack")
 
@@ -29,7 +28,7 @@ class SlackChannel(ChannelHandler):
         self.handler = None
         self.http_client = httpx.AsyncClient(timeout=30.0)
 
-    async def download_slack_image(self, url_private: str) -> Tuple[bytes, str]:
+    async def download_slack_image(self, url_private: str) -> tuple[bytes, str]:
         """下载 Slack 图片
 
         Args:
@@ -41,9 +40,7 @@ class SlackChannel(ChannelHandler):
         Raises:
             httpx.HTTPError: 下载失败
         """
-        headers = {
-            "Authorization": f"Bearer {self.bot_token}"
-        }
+        headers = {"Authorization": f"Bearer {self.bot_token}"}
 
         try:
             response = await self.http_client.get(url_private, headers=headers)
@@ -85,11 +82,14 @@ class SlackChannel(ChannelHandler):
             # 格式："{user_id}:{channel}:{thread_ts}"
             session_key = f"{user_id}:{channel}:{thread_ts}"
 
-            logger.debug(f"Slack 消息: user={user_id}, channel={channel}, thread={thread_ts}, session_key={session_key}")
+            logger.debug(
+                f"Slack 消息: user={user_id}, channel={channel}, thread={thread_ts}, "
+                f"session_key={session_key}"
+            )
 
             # 提取图片（如果有）
             files = event.get("files", [])
-            images: List[Tuple[bytes, str]] = []
+            images: list[tuple[bytes, str]] = []
 
             if files:
                 logger.info(f"检测到 {len(files)} 个文件附件")
@@ -107,7 +107,7 @@ class SlackChannel(ChannelHandler):
                             await client.chat_postMessage(
                                 channel=channel,
                                 text=f"⚠️ 无法下载图片: {str(e)}",
-                                thread_ts=thread_ts
+                                thread_ts=thread_ts,
                             )
 
             # 处理消息（传入 session_key）
@@ -116,7 +116,7 @@ class SlackChannel(ChannelHandler):
                     user_id=user_id,
                     text=text,
                     images=images if images else None,
-                    session_key=session_key  # ← 关键：按线程隔离
+                    session_key=session_key,  # ← 关键：按线程隔离
                 )
 
                 # 提取内部内容
@@ -124,17 +124,13 @@ class SlackChannel(ChannelHandler):
 
                 # 发送响应
                 await client.chat_postMessage(
-                    channel=channel,
-                    text=final_response,
-                    thread_ts=thread_ts
+                    channel=channel, text=final_response, thread_ts=thread_ts
                 )
 
             except Exception as e:
                 logger.error(f"处理消息失败: {e}")
                 await client.chat_postMessage(
-                    channel=channel,
-                    text=f"❌ 处理请求时出错: {str(e)}",
-                    thread_ts=thread_ts
+                    channel=channel, text=f"❌ 处理请求时出错: {str(e)}", thread_ts=thread_ts
                 )
 
         self.handler = AsyncSocketModeHandler(self.app, self.app_token)

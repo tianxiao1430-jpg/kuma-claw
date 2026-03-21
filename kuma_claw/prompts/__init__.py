@@ -8,9 +8,14 @@ Kuma Claw - 系统提示词模块
 - USER: 用户背景和偏好
 """
 
+from .identity import (
+    get_identity_prompt,
+    load_identity_from_file,
+    set_identity,
+    set_name,
+)
 from .soul import get_soul_prompt
-from .identity import get_identity_prompt, set_identity, set_name, load_identity_from_file
-from .user import get_user_context, set_user_info, load_user_from_file
+from .user import get_user_context, load_user_from_file, set_user_info
 
 
 def build_system_prompt() -> str:
