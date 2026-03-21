@@ -1,17 +1,17 @@
 """
 Kuma Claw - SQLite 会话服务
 ==========================
-将会话数据持久化到 SQLite，解决重启后会话丢失问题
+持久化会话，线程安全
 """
 
-import os
 import json
 import sqlite3
-import asyncio
+import threading
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 from google.adk.sessions import Session
 import logging
@@ -19,39 +19,31 @@ import logging
 logger = logging.getLogger("kuma_claw")
 
 
-@dataclass
-class SessionData:
-    """会话数据"""
-    id: str
-    user_id: str
-    app_name: str
-    state: Dict[str, Any]
-    created_at: str
-    updated_at: str
-
-
 class SQLiteSessionService:
-    """基于 SQLite 的会话服务（持久化）"""
+    """基于 SQLite 的会话服务（线程安全）"""
     
     def __init__(self, db_path: Optional[str] = None):
-        if db_path is None:
-            db_path = str(Path.home() / ".kuma-claw" / "sessions.db")
+        self.db_path = db_path or str(Path.home() / ".kuma-claw" / "sessions.db")
+        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         
-        self.db_path = db_path
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        
-        # SQLite 连接（支持多线程）
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self._lock = asyncio.Lock()
-        
+        # 线程本地存储 + WAL 模式
+        self._local = threading.local()
+        self._lock = threading.Lock()
         self._init_db()
-        logger.info(f"SQLite 会话服务已初始化：{db_path}")
+        logger.info(f"SQLite 会话服务已初始化：{self.db_path}")
+    
+    def _get_conn(self) -> sqlite3.Connection:
+        """获取线程本地连接"""
+        if not hasattr(self._local, 'conn') or self._local.conn is None:
+            self._local.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            self._local.conn.row_factory = sqlite3.Row
+            self._local.conn.execute("PRAGMA journal_mode=WAL")
+        return self._local.conn
     
     def _init_db(self):
         """初始化数据库"""
-        self.conn.executescript("""
-            -- 会话表
+        conn = self._get_conn()
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
@@ -61,211 +53,99 @@ class SQLiteSessionService:
                 updated_at TEXT NOT NULL
             );
             
-            -- 索引：按用户查询
-            CREATE INDEX IF NOT EXISTS idx_sessions_user 
-            ON sessions(user_id);
-            
-            -- 索引：按应用查询
-            CREATE INDEX IF NOT EXISTS idx_sessions_app 
-            ON sessions(app_name);
+            CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_sessions_app ON sessions(app_name);
         """)
-        self.conn.commit()
+        conn.commit()
     
     async def create_session(
-        self,
-        app_name: str,
-        user_id: str,
+        self, app_name: str, user_id: str, 
         state: Optional[Dict[str, Any]] = None,
         session_id: Optional[str] = None
     ) -> Session:
-        """创建会话
-        
-        Args:
-            app_name: 应用名称
-            user_id: 用户 ID
-            state: 初始状态
-            session_id: 会话 ID（可选，不传则自动生成）
-        
-        Returns:
-            Session 对象
-        """
-        import uuid
-        
+        """创建会话"""
         session_id = session_id or str(uuid.uuid4())
         now = datetime.utcnow().isoformat()
         state = state or {}
         
-        async with self._lock:
-            self.conn.execute(
-                """
-                INSERT INTO sessions (id, user_id, app_name, state, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
+        with self._lock:
+            self._get_conn().execute(
+                "INSERT INTO sessions (id, user_id, app_name, state, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (session_id, user_id, app_name, json.dumps(state), now, now)
             )
-            self.conn.commit()
+            self._get_conn().commit()
         
-        logger.debug(f"创建会话：id={session_id}, user={user_id}, app={app_name}")
-        
-        return Session(
-            id=session_id,
-            app_name=app_name,
-            user_id=user_id,
-            state=state,
-            created_at=now,
-            updated_at=now
-        )
+        logger.debug(f"创建会话：id={session_id}")
+        return Session(id=session_id, app_name=app_name, user_id=user_id, 
+                      state=state, created_at=now, updated_at=now)
     
-    async def get_session(
-        self,
-        app_name: str,
-        user_id: str,
-        session_id: str
-    ) -> Optional[Session]:
-        """获取会话
-        
-        Args:
-            app_name: 应用名称
-            user_id: 用户 ID
-            session_id: 会话 ID
-        
-        Returns:
-            Session 对象，不存在则返回 None
-        """
-        async with self._lock:
-            cursor = self.conn.execute(
-                """
-                SELECT id, user_id, app_name, state, created_at, updated_at
-                FROM sessions
-                WHERE id = ? AND app_name = ? AND user_id = ?
-                """,
+    async def get_session(self, app_name: str, user_id: str, session_id: str) -> Optional[Session]:
+        """获取会话"""
+        with self._lock:
+            row = self._get_conn().execute(
+                "SELECT * FROM sessions WHERE id = ? AND app_name = ? AND user_id = ?",
                 (session_id, app_name, user_id)
-            )
-            row = cursor.fetchone()
+            ).fetchone()
         
         if not row:
             return None
         
         return Session(
-            id=row["id"],
-            app_name=row["app_name"],
-            user_id=row["user_id"],
-            state=json.loads(row["state"]),
-            created_at=row["created_at"],
+            id=row["id"], app_name=row["app_name"], user_id=row["user_id"],
+            state=json.loads(row["state"]), created_at=row["created_at"], 
             updated_at=row["updated_at"]
         )
     
-    async def update_session(
-        self,
-        app_name: str,
-        user_id: str,
-        session_id: str,
-        state: Dict[str, Any]
-    ) -> Session:
-        """更新会话状态
-        
-        Args:
-            app_name: 应用名称
-            user_id: 用户 ID
-            session_id: 会话 ID
-            state: 新状态
-        
-        Returns:
-            更新后的 Session 对象
-        """
+    async def update_session(self, app_name: str, user_id: str, 
+                            session_id: str, state: Dict[str, Any]) -> Session:
+        """更新会话"""
         now = datetime.utcnow().isoformat()
         
-        async with self._lock:
-            self.conn.execute(
-                """
-                UPDATE sessions
-                SET state = ?, updated_at = ?
-                WHERE id = ? AND app_name = ? AND user_id = ?
-                """,
+        with self._lock:
+            self._get_conn().execute(
+                "UPDATE sessions SET state = ?, updated_at = ? "
+                "WHERE id = ? AND app_name = ? AND user_id = ?",
                 (json.dumps(state), now, session_id, app_name, user_id)
             )
-            self.conn.commit()
+            self._get_conn().commit()
         
-        return Session(
-            id=session_id,
-            app_name=app_name,
-            user_id=user_id,
-            state=state,
-            created_at=now,  # We don't have the original created_at here
-            updated_at=now
-        )
+        return Session(id=session_id, app_name=app_name, user_id=user_id,
+                      state=state, created_at=now, updated_at=now)
     
-    async def delete_session(
-        self,
-        app_name: str,
-        user_id: str,
-        session_id: str
-    ) -> bool:
-        """删除会话
-        
-        Args:
-            app_name: 应用名称
-            user_id: 用户 ID
-            session_id: 会话 ID
-        
-        Returns:
-            是否成功删除
-        """
-        async with self._lock:
-            cursor = self.conn.execute(
-                """
-                DELETE FROM sessions
-                WHERE id = ? AND app_name = ? AND user_id = ?
-                """,
+    async def delete_session(self, app_name: str, user_id: str, session_id: str) -> bool:
+        """删除会话"""
+        with self._lock:
+            cursor = self._get_conn().execute(
+                "DELETE FROM sessions WHERE id = ? AND app_name = ? AND user_id = ?",
                 (session_id, app_name, user_id)
             )
-            self.conn.commit()
+            self._get_conn().commit()
         
         deleted = cursor.rowcount > 0
         if deleted:
             logger.debug(f"删除会话：id={session_id}")
-        
         return deleted
     
-    async def list_sessions(
-        self,
-        app_name: str,
-        user_id: str
-    ) -> List[Session]:
-        """列出用户的所有会话
-        
-        Args:
-            app_name: 应用名称
-            user_id: 用户 ID
-        
-        Returns:
-            Session 列表
-        """
-        async with self._lock:
-            cursor = self.conn.execute(
-                """
-                SELECT id, user_id, app_name, state, created_at, updated_at
-                FROM sessions
-                WHERE app_name = ? AND user_id = ?
-                ORDER BY updated_at DESC
-                """,
+    async def list_sessions(self, app_name: str, user_id: str) -> List[Session]:
+        """列出会话"""
+        with self._lock:
+            rows = self._get_conn().execute(
+                "SELECT * FROM sessions WHERE app_name = ? AND user_id = ? "
+                "ORDER BY updated_at DESC",
                 (app_name, user_id)
-            )
-            rows = cursor.fetchall()
+            ).fetchall()
         
         return [
-            Session(
-                id=row["id"],
-                app_name=row["app_name"],
-                user_id=row["user_id"],
-                state=json.loads(row["state"]),
-                created_at=row["created_at"],
-                updated_at=row["updated_at"]
-            )
-            for row in rows
+            Session(id=r["id"], app_name=r["app_name"], user_id=r["user_id"],
+                   state=json.loads(r["state"]), created_at=r["created_at"], 
+                   updated_at=r["updated_at"])
+            for r in rows
         ]
     
     async def close(self):
-        """关闭数据库连接"""
-        self.conn.close()
+        """关闭连接"""
+        if hasattr(self._local, 'conn') and self._local.conn:
+            self._local.conn.close()
+            self._local.conn = None
         logger.info("SQLite 会话服务已关闭")
