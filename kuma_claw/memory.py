@@ -96,7 +96,7 @@ class MemoryStore:
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
-            
+
             -- 会话消息表（替代 JSON 文件）
             CREATE TABLE IF NOT EXISTS session_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,7 +105,7 @@ class MemoryStore:
                 content TEXT NOT NULL,
                 timestamp TEXT NOT NULL
             );
-            
+
             CREATE INDEX IF NOT EXISTS idx_session_messages_session 
             ON session_messages(session_id);
         """)

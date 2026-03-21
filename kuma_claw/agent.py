@@ -9,6 +9,7 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
@@ -19,7 +20,7 @@ logger = logging.getLogger("kuma_claw")
 # 懒加载缓存（带 TTL 失效机制)
 # ============================================
 
-_model_cache: str | None = None
+_model_cache: Any | None = None
 _model_cache_time: float = 0
 _google_workspace_toolsets_cache: list | None = None
 _google_workspace_cache_time: float = 0
@@ -27,16 +28,26 @@ _agent_cache: LlmAgent | None = None
 _agent_cache_time: float = 0
 
 # 缓存 TTL（秒）
-CACHE_ttl = 300  # 5 minutes
+CACHE_TTL = 300  # 5 minutes
 
 
 def reset_cache():
     """重置所有缓存"""
-    global _agent_cache, _google_workspace_toolsets_cache, _model_cache, _model_cache_time
+    global _agent_cache, _google_workspace_toolsets_cache, _model_cache
+    global _agent_cache_time, _google_workspace_cache_time, _model_cache_time
+    _model_cache = None
+    _model_cache_time = 0
     _agent_cache = None
     _agent_cache_time = 0
     _google_workspace_toolsets_cache = None
     _google_workspace_cache_time = 0
+
+
+def _is_cache_valid(cache_time: float) -> bool:
+    """检查缓存是否有效"""
+    if cache_time == 0:
+        return False
+    return (time.time() - cache_time) < CACHE_TTL
 
 
 def get_model():
@@ -50,10 +61,10 @@ def get_model():
         from .config import config
 
         model = config.get_model()
-    except ImportError:
+    except (ImportError, AttributeError):
         model = os.environ.get("KUMA_MODEL", "gemini-3.1-flash")
 
-    if model.startswith(("openai/", "anthropic/", "deepseek/")):
+    if isinstance(model, str) and model.startswith(("openai/", "anthropic/", "deepseek/")):
         from google.adk.models.lite_llm import LiteLlm
 
         _model_cache = LiteLlm(model=model)
@@ -65,8 +76,9 @@ def get_model():
 
 
 # ============================================
-# 匉能加载工具
+# 基础工具
 # ============================================
+
 
 def get_current_time() -> str:
     """获取当前时间"""
@@ -176,6 +188,7 @@ def _load_google_workspace_toolsets():
         logger.error(f"加载 Google Workspace 工具集失败：{e}")
         _google_workspace_toolsets_cache = []
 
+    _google_workspace_cache_time = time.time()
     return _google_workspace_toolsets_cache
 
 
@@ -184,13 +197,12 @@ def _load_google_workspace_toolsets():
 # ============================================
 
 
-def _load_and_register_skills(tools_list: list, message_text: str | None) -> int:
+def _load_and_register_skills(tools_list: list, message_text: str | None = None) -> int:
     """加载 Skills 并注册工具（按需加载）
 
     Args:
         tools_list: 工具列表
         message_text: 用户消息文本（用于触发词匹配）
-        session_id: 会话 ID（可选）
 
     Returns:
             注册的工具数量
@@ -201,16 +213,21 @@ def _load_and_register_skills(tools_list: list, message_text: str | None) -> int
         logger.info("从 kuma_claw.skills 加载 skill_manager")
 
         # 检查是否有匹配的技能
-        matched_skill = skill_manager.get_skill_by_trigger(message_text)
-        if matched_skill:
-            # 按需加载：只注册匹配的工具
-            tools_list.extend(matched_skill.tools)
-            logger.info(f"按需加载技能: {matched_skill.name} ({len(matched_skill.tools)} 个工具)")
-            return len(tools)
-        else:
-            # 回退：加载所有技能
-            _load_and_register_skills(tools_list)
-            return len(tools_list)
+        if message_text:
+            matched_skill = skill_manager.get_skill_by_trigger(message_text)
+            if matched_skill:
+                # 按需加载：只注册匹配的工具
+                count = 0
+                for tool in matched_skill.tools:
+                    if tool not in tools_list:
+                        tools_list.append(tool)
+                        count += 1
+                logger.info(f"按需加载技能: {matched_skill.name} ({count} 个新工具)")
+                return count
+
+        # 回退：加载所有技能
+        skill_manager.register_tools_to_agent(type("Agent", (), {"tools": tools_list})())
+        return len(tools_list)
 
     except Exception as e:
         logger.error(f"加载 Skills 失败：{e}")
@@ -222,7 +239,7 @@ def _load_and_register_skills(tools_list: list, message_text: str | None) -> int
 # ============================================
 
 
-def get_tools(message_text: str | None = "telegram") -> list[FunctionTool]:
+def get_tools(message_text: str | None = None) -> list[FunctionTool]:
     """获取工具列表（支持按需加载）"""
     tools = [
         FunctionTool(func=web_search),
@@ -235,16 +252,13 @@ def get_tools(message_text: str | None = "telegram") -> list[FunctionTool]:
     ]
 
     # 加载 Google Workspace 工具集
-    gw_tools = _load_google_workspace_toolsets()
-    if gw_tools:
-        tools.extend(gw_tools)
+    gw_toolsets = _load_google_workspace_toolsets()
+    for toolset in gw_toolsets:
+        if hasattr(toolset, "tools"):
+            tools.extend(toolset.tools)
 
     # 按需加载技能（基于消息内容）
-    if message_text:
-                _load_and_register_skills_by_trigger(tools, message_text)
-
-            else:
-                _load_and_register_skills(tools)
+    _load_and_register_skills(tools, message_text)
 
     return tools
 
@@ -273,7 +287,7 @@ def get_system_instruction(channel: str = "telegram") -> str:
 给用户的实际回复...
 ```
 """
-    time_prompt = f"\n\n## 系统信息\n当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    time_prompt = f"\\n\\n## 系统信息\\n当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\\n"
 
     return inject_format_prompt(base_prompt + time_prompt + internal_prompt, channel)
 
@@ -301,7 +315,7 @@ def get_agent(channel: str = "telegram", force_refresh: bool = False) -> LlmAgen
     if _agent_cache is None or not _is_cache_valid(_agent_cache_time) or force_refresh:
         _agent_cache = create_agent(channel)
         _agent_cache_time = time.time()
-        logger.debug("Agent 缓存已过期，重新创建")
+        logger.debug("Agent 缓存已过期或不存在，重新创建")
     return _agent_cache
 
 
@@ -317,4 +331,4 @@ def __getattr__(name):
 
 
 if __name__ == "__main__":
-    print(f"Kuma Claw Agent 已定义\n总工具数量：{len(get_tools())}")
+    print(f"Kuma Claw Agent 已定义\\n总工具数量：{len(get_tools())}")
