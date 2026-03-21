@@ -212,17 +212,17 @@ class OAuthFlow:
                         self.wfile.write(
                             "<html><body><h1>✅ 授权成功！</h1>"
                             "<p>您可以关闭此页面，返回 CLI 继续操作。</p></body></html>"
-                            .encode("utf-8")
+                            .encode()
                         )
                     elif "error" in params:
                         callback_received["error"] = params["error"]
                         self.send_response(200)
                         self.send_header("Content-type", "text/html")
                         self.end_headers()
-                        error_msg = params["error"].encode("utf-8")
+                        error_msg = params["error"].encode()
                         self.wfile.write(
                             "<html><body><h1>❌ 授权失败</h1><p>Error: %s</p></body></html>"
-                            .encode("utf-8") % error_msg
+                            .encode() % error_msg
                         )
                     else:
                         self.send_response(400)
@@ -248,8 +248,8 @@ class OAuthFlow:
         # 等待服务器启动
         server_ready.wait(timeout=5)
 
-        print(f"\n🌐 正在打开浏览器进行授权...")
-        print(f"   如果浏览器没有自动打开，请访问：")
+        print("\n🌐 正在打开浏览器进行授权...")
+        print("   如果浏览器没有自动打开，请访问：")
         print(f"   {auth_url}\n")
 
         # 打开浏览器
@@ -263,7 +263,7 @@ class OAuthFlow:
             print(f"\n[red]❌ 授权失败：{callback_received['error']}[/red]")
             return False
         elif callback_received["code"]:
-            print(f"\n[green]✅ 授权成功！正在换取 Token...[/green]")
+            print("\n[green]✅ 授权成功！正在换取 Token...[/green]")
             # 用 code 换取 tokens
             tokens = self.exchange_code_for_tokens(callback_received["code"])
             # 保存 tokens
@@ -274,10 +274,10 @@ class OAuthFlow:
                 refresh_token=tokens.get("refresh_token", ""),
                 expires_in=tokens["expires_in"],
             )
-            print(f"[green]✅ Token 已保存[/green]")
+            print("[green]✅ Token 已保存[/green]")
             return True
         else:
-            print(f"\n[yellow]⚠️  授权超时，请重试[/yellow]")
+            print("\n[yellow]⚠️  授权超时，请重试[/yellow]")
             return False
 
 

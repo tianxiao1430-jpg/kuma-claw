@@ -2,7 +2,7 @@
 Kuma Claw - 渠道基类
 ==================
 
-所有渠道的公共逻辑（会话管理、Agent 运行）
+所有渠道的公共逻辑（会话管理、 Agent 运行）
 """
 
 import logging
@@ -39,7 +39,7 @@ class SessionManager:
         Args:
             user_id: 用户 ID
             session_key: 会话键（可选）
-                        - 格式："{user_id}:{channel}:{thread_id}"
+                        - 格式: "{user_id}:{channel}:{thread_id}"
                         - 不传则使用 user_id 作为键
 
         Returns:
@@ -59,10 +59,10 @@ class SessionManager:
                 # 获取 session id
                 session_id = session.id if hasattr(session, "id") else str(session)
                 self.user_sessions[key] = session_id
-                logger.debug(f"创建新会话：key={key}, session={session_id}")
+                logger.debug(f"创建新会话： key={key}, session={session_id}")
 
             except Exception as e:
-                logger.error(f"创建会话失败：{e}")
+                logger.error(f"创建会话失败: {e}")
                 raise
 
         return self.user_sessions[key]
@@ -88,10 +88,10 @@ class SessionManager:
                     session_id=session_id
                 )
                 del self.user_sessions[key]
-                logger.debug(f"清除会话：key={key}")
+                logger.debug(f"清除会话: key={key}")
                 return True
             except Exception as e:
-                logger.error(f"清除会话失败：{e}")
+                logger.error(f"清除会话失败: {e}")
                 return False
         return False
 
@@ -172,8 +172,8 @@ async def run_agent_with_session(
         logger.warning(f"LLM API 超时，将重试：{e}")
         raise
     except Exception as e:
-        logger.error(f"运行 Agent 失败：{e}")
-        raise LLMAPIError(f"LLM API 调用失败：{str(e)}")
+        logger.error(f"运行 Agent 失败: {e}")
+        raise LLMAPIError(f"LLM API 调用失败: {str(e)}") from e
 
 
 async def run_agent_with_session_fallback(
@@ -183,9 +183,9 @@ async def run_agent_with_session_fallback(
     parts: list[types.Part],
     session_key: str | None = None,
 ) -> str:
-    """运行 Agent 并返回响应（带重试和降级处理）
+    """运行 Agent 并返回响应（带重试和降级处理)
 
-    这是 run_agent_with_session 的包装器，在重试失败后返回友好的错误消息。
+    这是 run_agent_with_session 的包装器,在重试失败后返回友好的错误消息。
 
     Args:
         runner: ADK Runner 实例
@@ -206,11 +206,11 @@ async def run_agent_with_session_fallback(
             session_key=session_key,
         )
     except LLMAPIError as e:
-        logger.error(f"LLM API 调用失败（重试耗尽）：{e}")
+        logger.error(f"LLM API 调用失败（重试耗尽): {e}")
         return "抱歉，服务暂时不可用，请稍后重试。"
     except Exception as e:
-        logger.error(f"运行 Agent 失败：{e}")
-        return f"处理请求时出错：{str(e)}"
+        logger.error(f"运行 Agent 失败: {e}")
+        return f"处理请求时出错: {str(e)}"
 
 
 # ============================================
@@ -225,18 +225,18 @@ class ChannelHandler(ABC):
         self.agent = agent
         self.session_manager = SessionManager(db_path=db_path)
 
-        # 创建 Runner（使用持久化会话服务）
+        # 创建 Runner（使用持久化会话服务)
         self.runner = Runner(
             app_name="kuma-claw",
             agent=agent,
             session_service=self.session_manager.session_service,
         )
 
-        logger.info(f"{channel_name} 渠道已初始化（使用 SQLite 持久化会话）")
+        logger.info(f"{channel_name} 渠道已初始化(使用 SQLite 持久化会话)")
 
     @abstractmethod
     async def handle_message(self, user_id: str, text: str, **kwargs) -> str:
-        """处理消息（子类实现）
+        """处理消息(子类实现)
 
         Args:
             user_id: 用户 ID
@@ -250,12 +250,12 @@ class ChannelHandler(ABC):
 
     @abstractmethod
     async def start(self):
-        """启动渠道（子类实现）"""
+        """启动渠道(子类实现)"""
         pass
 
     @abstractmethod
     async def stop(self):
-        """停止渠道（子类实现）"""
+        """停止渠道(子类实现)"""
         pass
 
     async def run_agent(
@@ -265,26 +265,26 @@ class ChannelHandler(ABC):
         images: list[tuple[bytes, str]] | None = None,
         session_key: str | None = None
     ) -> str:
-        """运行 Agent（公共逻辑）
+        """运行 Agent(公共逻辑)
 
         Args:
             user_id: 用户 ID
             text: 消息文本
-            images: 图片列表，格式为 [(bytes, mime_type), ...]
-            session_key: 会话键（可选）
+            images: 图片列表, 格式为 [(bytes, mime_type), ...]
+            session_key: 会话键（可选)
                         - 用于隔离不同会话的上下文
-                        - 格式建议："{user_id}:{channel}:{thread_id}"
+                        - 格式建议: "{user_id}:{channel}:{thread_id}"
 
         Returns:
             Agent 响应
         """
         parts = [types.Part(text=text)]
 
-        # 添加图片（如果有）
+        # 添加图片(如果有)
         if images:
             for img_bytes, mime_type in images:
                 if not isinstance(img_bytes, bytes):
-                    logger.warning(f"图片数据类型错误：{type(img_bytes)}，跳过")
+                    logger.warning(f"图片数据类型错误: {type(img_bytes)}, 跳过")
                     continue
 
                 parts.append(types.Part(
@@ -303,6 +303,6 @@ class ChannelHandler(ABC):
         )
 
     async def cleanup(self):
-        """清理资源（在应用关闭时调用）"""
+        """清理资源(在应用关闭时调用)"""
         await self.session_manager.close()
         logger.info(f"{self.channel_name} 渠道已清理")

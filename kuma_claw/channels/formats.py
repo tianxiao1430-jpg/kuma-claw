@@ -5,14 +5,11 @@ Kuma Claw - 动态格式注入
 根据渠道类型自动注入相应的消息格式规范。
 """
 
-from typing import Dict, Optional
-
-
 # ============================================
 # 渠道格式规范
 # ============================================
 
-CHANNEL_FORMATS: Dict[str, str] = {
+CHANNEL_FORMATS: dict[str, str] = {
     "telegram": """
 ## Telegram 消息格式规范
 
@@ -43,7 +40,6 @@ Telegram 支持 MarkdownV2 和 HTML，但我们推荐使用简化的 Markdown：
 `print("hello")`
 ```
 """,
-
     "slack": """
 ## Slack 消息格式规范
 
@@ -74,7 +70,6 @@ Hi <@U123>, 请查看 <#C456|general>
 • Bug 修复
 ```
 """,
-
     "discord": """
 ## Discord 消息格式规范
 
@@ -107,7 +102,6 @@ Discord 支持 Markdown：
 • 项目 2
 ```
 """,
-
     "web": """
 ## Web UI 消息格式规范
 
@@ -147,7 +141,6 @@ Web UI 支持完整 Markdown：
 [查看详情](http://example.com)
 ```
 """,
-
     "whatsapp": """
 ## WhatsApp 消息格式规范
 
@@ -177,7 +170,6 @@ WhatsApp 使用简化的格式：
 链接：https://example.com
 ```
 """,
-
     "console": """
 ## 控制台输出格式规范
 
@@ -211,6 +203,7 @@ WhatsApp 使用简化的格式：
 # ============================================
 # 获取格式规范
 # ============================================
+
 
 def get_format_prompt(channel: str) -> str:
     """获取指定渠道的格式规范
@@ -246,7 +239,7 @@ def get_format_prompt(channel: str) -> str:
     return CHANNEL_FORMATS.get(normalized, CHANNEL_FORMATS["console"])
 
 
-def get_supported_channels() -> list:
+def get_supported_channels() -> list[str]:
     """获取支持的渠道列表"""
     return list(CHANNEL_FORMATS.keys())
 
@@ -254,6 +247,7 @@ def get_supported_channels() -> list:
 # ============================================
 # 格式转换工具（可选）
 # ============================================
+
 
 def convert_markdown_to_channel(text: str, target_channel: str) -> str:
     """将标准 Markdown 转换为目标渠道格式
@@ -277,15 +271,15 @@ def convert_markdown_to_channel(text: str, target_channel: str) -> str:
 
     if target_channel in single_star_channels:
         # **bold** → *bold*
-        text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
+        text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
 
         # ## 标题 → *标题*
-        text = re.sub(r'^## (.+)$', r'*\1*', text, flags=re.MULTILINE)
-        text = re.sub(r'^### (.+)$', r'*\1*', text, flags=re.MULTILINE)
+        text = re.sub(r"^## (.+)$", r"*\1*", text, flags=re.MULTILINE)
+        text = re.sub(r"^### (.+)$", r"*\1*", text, flags=re.MULTILINE)
 
         # [link](url) → url (WhatsApp)
         if target_channel == "whatsapp":
-            text = re.sub(r'\[(.+?)\]\((.+?)\)', r'\2', text)
+            text = re.sub(r"\[(.+?)\]\((.+?)\)", r"\2", text)
 
     return text
 
@@ -300,11 +294,12 @@ def strip_internal_tags(text: str) -> str:
         清理后的文本
     """
     import re
+
     # 移除 <internal>...</internal> 块
-    return re.sub(r'<internal>.*?</internal>', '', text, flags=re.DOTALL).strip()
+    return re.sub(r"<internal>.*?</internal>", "", text, flags=re.DOTALL).strip()
 
 
-def extract_internal_content(text: str) -> tuple:
+def extract_internal_content(text: str) -> tuple[str, str]:
     """提取 <internal> 内容和用户可见内容
 
     Args:
@@ -316,12 +311,12 @@ def extract_internal_content(text: str) -> tuple:
     import re
 
     # 提取 internal 内容
-    internal_match = re.search(r'<internal>(.*?)</internal>', text, flags=re.DOTALL)
+    internal_match = re.search(r"<internal>(.*?)</internal>", text, flags=re.DOTALL)
     internal = internal_match.group(1).strip() if internal_match else ""
 
     # 提取可见内容
     visible = strip_internal_tags(text)
-    
+
     # 防止返回完全为空导致渠道（如 Telegram）发送失败
     if not visible.strip():
         visible = "（处理完毕，本次 AI 仅执行了内部思考或未输出可见文本）"
@@ -332,6 +327,7 @@ def extract_internal_content(text: str) -> tuple:
 # ============================================
 # 便捷函数
 # ============================================
+
 
 def inject_format_prompt(base_prompt: str, channel: str) -> str:
     """将格式规范注入到基础提示词中
@@ -350,9 +346,9 @@ def inject_format_prompt(base_prompt: str, channel: str) -> str:
 if __name__ == "__main__":
     # 测试
     print("支持的渠道:", get_supported_channels())
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Telegram 格式规范:")
-    print("="*60)
+    print("=" * 60)
     print(get_format_prompt("telegram"))
 
     # 测试 internal 标签
@@ -365,6 +361,6 @@ if __name__ == "__main__":
 """
 
     internal, visible = extract_internal_content(test_text)
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Internal 内容:", internal)
     print("Visible 内容:", visible)
