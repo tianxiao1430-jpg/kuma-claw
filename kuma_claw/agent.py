@@ -11,46 +11,45 @@ from typing import Optional, List
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 
-# 配置日志
 logger = logging.getLogger("kuma_claw")
 
-# 懒加载：模型配置在首次调用时初始化
+# 懒加载缓存
 _model_cache: Optional[str] = None
 _google_workspace_toolsets_cache: Optional[List] = None
 _agent_cache: Optional[LlmAgent] = None
 
 
-# ============================================
-# 懒加载：模型配置
-# ============================================
+def reset_cache():
+    """重置所有缓存（测试用）"""
+    global _model_cache, _agent_cache, _google_workspace_toolsets_cache
+    _model_cache = None
+    _agent_cache = None
+    _google_workspace_toolsets_cache = []
+
 
 def get_model():
     """获取模型配置（懒加载）"""
     global _model_cache
-    
     if _model_cache is not None:
         return _model_cache
     
-    # 首次调用时加载
     try:
         from .config import config
         model = config.get_model()
     except ImportError:
         model = os.environ.get("KUMA_MODEL", "gemini-3.1-flash")
     
-    # 根据模型类型初始化
-    if model.startswith("openai/") or model.startswith("anthropic/") or model.startswith("deepseek/"):
+    if model.startswith(("openai/", "anthropic/", "deepseek/")):
         from google.adk.models.lite_llm import LiteLlm
         _model_cache = LiteLlm(model=model)
     else:
-        # 默认 Gemini
         _model_cache = model
     
     return _model_cache
 
 
 # ============================================
-# 工具定义
+# 基础工具
 # ============================================
 
 def get_current_time() -> str:
@@ -69,83 +68,40 @@ def echo_message(message: str) -> str:
 # ============================================
 
 def remember(content: str, source: str = "fact") -> str:
-    """记住重要信息
-
-    Args:
-        content: 要记住的内容
-        source: 来源类型（fact/preference/note）
-
-    Returns:
-        确认消息
-    """
+    """记住重要信息"""
     from .memory import memory_manager
-    entry = memory_manager.remember(content, source=source)
+    memory_manager.remember(content, source=source)
     return f"✅ 已记住：{content}"
 
 
 def recall(query: str, limit: int = 5) -> str:
-    """回忆相关信息
-
-    Args:
-        query: 搜索关键词
-        limit: 返回数量
-
-    Returns:
-        相关记忆
-    """
+    """回忆相关信息"""
     from .memory import memory_manager
     results = memory_manager.search(query, limit=limit)
-
     if not results:
         return "没有找到相关记忆"
-
-    lines = ["📚 相关记忆："]
-    for r in results:
-        lines.append(f"- {r.entry.content}")
-
-    return "\n".join(lines)
+    return "📚 相关记忆：\n" + "\n".join(f"- {r.entry.content}" for r in results)
 
 
 def forget(content_pattern: str) -> str:
-    """忘记特定记忆
-
-    Args:
-        content_pattern: 要忘记的内容模式
-
-    Returns:
-        确认消息
-    """
+    """忘记特定记忆"""
     from .memory import memory_manager
     results = memory_manager.search(content_pattern, limit=1)
-
     if not results:
         return "没有找到匹配的记忆"
-
     entry = results[0].entry
     memory_manager.forget(entry.id)
     return f"✅ 已忘记：{entry.content}"
 
 
 def get_memory_stats() -> str:
-    """获取记忆统计
-
-    Returns:
-        记忆统计信息
-    """
+    """获取记忆统计"""
     from .memory import memory_manager
     stats = memory_manager.stats()
-
-    lines = [
-        f"📊 记忆统计：",
-        f"- 总条目：{stats.total_entries}",
-    ]
-
-    for source, count in stats.by_source.items():
-        lines.append(f"- {source}: {count}")
-
+    lines = [f"📊 记忆统计：\n- 总条目：{stats.total_entries}"]
+    lines.extend(f"- {k}: {v}" for k, v in stats.by_source.items())
     if stats.last_sync:
         lines.append(f"- 最后同步：{stats.last_sync}")
-
     return "\n".join(lines)
 
 
@@ -154,78 +110,33 @@ def get_memory_stats() -> str:
 # ============================================
 
 def web_search(query: str, limit: int = 5) -> str:
-    """通过 DuckDuckGo 搜索网络获取实时信息
-
-    Args:
-        query: 搜索关键词
-        limit: 返回的结果数量上限
-
-    Returns:
-        包含标题、摘要和链接的搜索结果文本
-    """
+    """通过 DuckDuckGo 搜索网络"""
     try:
-        # 优先使用新包 ddgs
-        try:
-            from ddgs import DDGS
-            logger.debug("使用 ddgs 包（新）")
-
-            # 新包：直接返回 list
-            with DDGS() as ddgs:
-                results_raw = ddgs.text(query, max_results=limit)
-
-            results = []
-            for r in results_raw:
-                results.append(
-                    f"标题：{r.get('title')}\n"
-                    f"内容：{r.get('body')}\n"
-                    f"链接：{r.get('href')}"
-                )
-
-        except ImportError:
-            # 备选：旧包 duckduckgo_search
-            try:
-                from duckduckgo_search import DDGS
-                logger.debug("使用 duckduckgo-search 包（旧）")
-
-                # 旧包：需要 with 语句
-                results = []
-                with DDGS() as ddgs:
-                    for r in ddgs.text(query, max_results=limit):
-                        results.append(
-                            f"标题：{r.get('title')}\n"
-                            f"内容：{r.get('body')}\n"
-                            f"链接：{r.get('href')}"
-                        )
-
-            except ImportError:
-                return (
-                    "❌ 搜索功能不可用：未安装搜索库\n"
-                    "安装新包：pip install ddgs>=9.0.0\n"
-                    "或旧包：pip install duckduckgo-search"
-                )
-
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=limit))
+        
         if not results:
             return f"没有找到关于 '{query}' 的搜索结果。"
-
-        return "\n\n".join(results)
-
+        
+        return "\n\n".join(
+            f"标题：{r.get('title')}\n内容：{r.get('body')}\n链接：{r.get('href')}"
+            for r in results
+        )
+    except ImportError:
+        return "❌ 搜索功能不可用：pip install duckduckgo-search"
     except Exception as e:
-        logger.error(f"搜索失败：{str(e)}")
-        return f"搜索失败：{str(e)}"
+        logger.error(f"搜索失败：{e}")
+        return f"搜索失败：{e}"
 
 
 # ============================================
-# Google Workspace 工具（ADK 内置）
+# Google Workspace 工具
 # ============================================
 
 def _load_google_workspace_toolsets():
-    """加载 ADK 内置的 Google Workspace 工具集（懒加载 + 缓存）
-
-    Returns:
-        工具集列表（失败时返回空列表）
-    """
+    """加载 Google Workspace 工具集（懒加载）"""
     global _google_workspace_toolsets_cache
-    
     if _google_workspace_toolsets_cache is not None:
         return _google_workspace_toolsets_cache
     
@@ -233,84 +144,54 @@ def _load_google_workspace_toolsets():
         from .tools.adk_google_workspace import create_all_google_workspace_toolsets
         _google_workspace_toolsets_cache = create_all_google_workspace_toolsets()
         logger.info(f"已加载 {len(_google_workspace_toolsets_cache)} 个 Google Workspace 工具集")
-        return _google_workspace_toolsets_cache
-    except ImportError as e:
-        logger.warning(f"Google Workspace 工具集不可用：{e}")
+    except ImportError:
+        logger.warning("Google Workspace 工具集不可用")
         _google_workspace_toolsets_cache = []
-        return []
     except Exception as e:
         logger.error(f"加载 Google Workspace 工具集失败：{e}")
         _google_workspace_toolsets_cache = []
-        return []
+    
+    return _google_workspace_toolsets_cache
 
 
 # ============================================
-# Skill 工具自动注册
+# Skills 工具
 # ============================================
 
 def _load_and_register_skills(tools_list: list) -> int:
-    """加载 Skills 并注册工具到 Agent
-
-    Args:
-        tools_list: 现有工具列表（会被修改）
-
-    Returns:
-        注册的 Skill 工具数量
-    """
+    """加载 Skills 并注册工具"""
     try:
-        # 尝试从多个可能的位置加载 skill_manager
-        skill_manager = None
-        
-        # 位置 1: skills/kuma-skills-system/scripts/skill_manager.py
-        skills_script_path = Path(__file__).parent.parent / "skills" / "kuma-skills-system" / "scripts"
-        if (skills_script_path / "skill_manager.py").exists():
-            import sys
-            if str(skills_script_path) not in sys.path:
-                sys.path.insert(0, str(skills_script_path))
-            
-            try:
+        # 优先从 kuma_claw.skills 加载
+        try:
+            from .skills.skill_manager import skill_manager
+            logger.info("从 kuma_claw.skills 加载 skill_manager")
+        except ImportError:
+            # 回退到外部路径
+            skills_path = Path(__file__).parent.parent / "skills" / "kuma-skills-system" / "scripts"
+            if (skills_path / "skill_manager.py").exists():
+                import sys
+                sys.path.insert(0, str(skills_path))
                 from skill_manager import skill_manager
-                logger.info(f"从 {skills_script_path} 加载 skill_manager")
-            except ImportError as e:
-                logger.warning(f"无法从 skills_script_path 加载 skill_manager: {e}")
+                logger.info(f"从 {skills_path} 加载 skill_manager")
+            else:
+                logger.warning("无法加载 skill_manager")
+                return 0
         
-        # 位置 2: kuma_claw/skills/skill_manager.py
-        if skill_manager is None:
-            try:
-                from .skills.skill_manager import skill_manager
-                logger.info("从 kuma_claw.skills 加载 skill_manager")
-            except ImportError as e:
-                logger.warning(f"无法从 kuma_claw.skills 加载 skill_manager: {e}")
-        
-        if skill_manager is None:
-            logger.warning("无法加载 skill_manager，Skills 工具将不可用")
-            return 0
-        
-        # 注册工具
-        registered_count = skill_manager.register_tools_to_agent(type('Agent', (), {'tools': tools_list})())
-        
-        # 由于 register_tools_to_agent 直接修改了 tools_list，我们返回注册数量
-        skill_tools = skill_manager.get_all_tools()
-        logger.info(f"加载了 {len(skill_tools)} 个 Skill 工具")
-        
-        return len(skill_tools)
-        
+        skill_manager.register_tools_to_agent(type('Agent', (), {'tools': tools_list})())
+        tools = skill_manager.get_all_tools()
+        logger.info(f"加载了 {len(tools)} 个 Skill 工具")
+        return len(tools)
     except Exception as e:
         logger.error(f"加载 Skills 失败：{e}")
         return 0
 
 
 # ============================================
-# 懒加载：工具列表
+# 工具列表
 # ============================================
 
 def get_tools() -> List[FunctionTool]:
-    """获取工具列表（懒加载）
-
-    Returns:
-        工具列表
-    """
-    # 基础工具
+    """获取工具列表"""
     tools = [
         FunctionTool(func=web_search),
         FunctionTool(func=get_current_time),
@@ -320,17 +201,15 @@ def get_tools() -> List[FunctionTool]:
         FunctionTool(func=forget),
         FunctionTool(func=get_memory_stats),
     ]
-
-    # 添加 ADK 内置 Google Workspace 工具集
-    google_workspace_toolsets = _load_google_workspace_toolsets()
-    if google_workspace_toolsets:
-        tools.extend(google_workspace_toolsets)
-
-    # 自动注册 Skills 工具
-    skills_tools_count = _load_and_register_skills(tools)
-    if skills_tools_count > 0:
-        logger.info(f"已注册 {skills_tools_count} 个 Skill 工具")
-
+    
+    # Google Workspace
+    gw_tools = _load_google_workspace_toolsets()
+    if gw_tools:
+        tools.extend(gw_tools)
+    
+    # Skills
+    _load_and_register_skills(tools)
+    
     return tools
 
 
@@ -339,60 +218,32 @@ def get_tools() -> List[FunctionTool]:
 # ============================================
 
 def get_system_instruction(channel: str = "telegram") -> str:
-    """构建系统提示词（支持动态格式注入）
-
-    Args:
-        channel: 渠道名称（telegram, slack, discord, web, whatsapp）
-
-    Returns:
-        完整的系统提示词
-    """
+    """构建系统提示词"""
     from .prompts import build_system_prompt
-    from .channels.formats import get_format_prompt, inject_format_prompt
-
+    from .channels.formats import inject_format_prompt
+    from datetime import datetime
+    
     base_prompt = build_system_prompt()
-
-    # 添加内部思考标签说明
     internal_prompt = """
 
 ## 内部思考 (Internal Thoughts)
 
-如果部分输出是你的内部推理过程而非给用户的内容，使用 `<internal>` 标签：
-
+使用 `<internal>` 标签包裹内部推理（不发送给用户）：
 ```
 <internal>
-你的内部思考过程...
-分析步骤、决策逻辑、调试信息等...
+分析步骤、决策逻辑...
 </internal>
 
 给用户的实际回复...
 ```
-
-`<internal>` 标签内的内容会被记录到日志但**不会发送给用户**。
 """
-
-    # 组合基础提示词
-    import datetime
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    time_prompt = f"\n\n## 系统信息\n当前时间：{now_str}\n"
-
-    full_prompt = base_prompt + time_prompt + internal_prompt
-
-    # 动态注入格式规范
-    full_prompt = inject_format_prompt(full_prompt, channel)
-
-    return full_prompt
+    time_prompt = f"\n\n## 系统信息\n当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    
+    return inject_format_prompt(base_prompt + time_prompt + internal_prompt, channel)
 
 
 def create_agent(channel: str = "telegram") -> LlmAgent:
-    """创建 Agent 实例（懒加载 + 支持渠道适配）
-
-    Args:
-        channel: 渠道名称
-
-    Returns:
-        配置好的 Agent 实例
-    """
+    """创建 Agent 实例"""
     return LlmAgent(
         name="kuma_claw",
         model=get_model(),
@@ -403,45 +254,27 @@ def create_agent(channel: str = "telegram") -> LlmAgent:
 
 
 def get_agent(channel: str = "telegram") -> LlmAgent:
-    """获取 Agent 实例（单例模式，懒加载）
-
-    Args:
-        channel: 渠道名称
-
-    Returns:
-        Agent 实例
-    """
+    """获取 Agent 实例（单例）"""
     global _agent_cache
-    
-    if _agent_cache is not None:
-        return _agent_cache
-    
-    _agent_cache = create_agent(channel)
+    if _agent_cache is None:
+        _agent_cache = create_agent(channel)
     return _agent_cache
 
 
 # ============================================
-# 导出（向后兼容）
+# 模块导出
 # ============================================
 
-# 懒加载：仅在访问时创建
 def __getattr__(name):
-    """支持模块级属性的懒加载"""
-    if name == "kuma_claw_agent":
+    """懒加载模块属性"""
+    if name in ("kuma_claw_agent", "root_agent"):
         return get_agent("telegram")
-    elif name == "root_agent":
-        return get_agent("telegram")
-    elif name == "TOOLS":
+    if name == "TOOLS":
         return get_tools()
-    elif name == "MODEL":
+    if name == "MODEL":
         return get_model()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 if __name__ == "__main__":
-    print("Kuma Claw Agent 已定义")
-    tools = get_tools()
-    google_workspace_toolsets = _load_google_workspace_toolsets()
-    # Note: skills are already registered in get_tools(), but we can't easily count them separately here
-    print(f"总工具数量：{len(tools)}")
-    print("\n支持的渠道：telegram, slack, discord, web, whatsapp, console")
+    print(f"Kuma Claw Agent 已定义\n总工具数量：{len(get_tools())}")

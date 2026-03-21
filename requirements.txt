@@ -1,42 +1,42 @@
 # Kuma Claw 依赖
 
 # Google ADK
-google-adk>=0.1.0
-google-genai>=0.3.0
+google-adk~=0.1.0
+google-genai~=0.3.0
 
 # Slack
-slack-bolt>=1.18.0
+slack-bolt~=1.18.0
 
 # Telegram
-python-telegram-bot>=20.0
+python-telegram-bot~=20.0
 
 # Web UI & Gateway
-fastapi>=0.104.0
-uvicorn>=0.24.0
-websockets>=12.0
-jinja2>=3.1.0
-python-multipart>=0.0.6
+fastapi~=0.104.0
+uvicorn~=0.24.0
+websockets~=12.0
+jinja2~=3.1.0
+python-multipart~=0.0.6
 
 # CLI
-click>=8.1.0
-rich>=13.0.0
+click~=8.1.0
+rich~=13.0.0
 
-# OAuth
-httpx>=0.25.0
+# 安全存储
+keyring~=24.0.0
 
 # 记忆系统
-requests>=2.31.0
+requests~=2.31.0
 
 # 其他
-python-dotenv>=1.0.0
+python-dotenv~=1.0.0
 
-# 搜索（修复：正确的包名）
-duckduckgo-search>=6.0.0
+# 搜索
+duckduckgo-search~=6.0.0
 
 # 重试策略
-tenacity>=8.2.0
+tenacity~=8.2.0
 
 # 测试
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-pytest-cov>=4.1.0
+pytest~=7.4.0
+pytest-asyncio~=0.21.0
+pytest-cov~=4.1.0
