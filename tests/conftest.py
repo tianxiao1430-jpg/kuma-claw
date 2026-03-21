@@ -1,7 +1,8 @@
 """Pytest 配置文件"""
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # 添加项目根目录到 Python 路径
 project_root = Path(__file__).parent.parent

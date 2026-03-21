@@ -3,13 +3,12 @@ Kuma Claw - 主入口
 ================
 """
 
+import asyncio
+import logging
 import os
 import sys
-import time
-import logging
-import asyncio
 import threading
-from pathlib import Path
+import time
 
 from .config import config
 
@@ -102,7 +101,7 @@ def main():
     # Web UI
     if args.web or args.all:
         from .web_ui import start_web_ui
-        
+
         web_thread = threading.Thread(
             target=start_web_ui,
             kwargs={"port": args.port},
@@ -114,13 +113,13 @@ def main():
     # 异步服务启动逻辑
     async def run_services():
         tasks = []
-        
+
         # Slack
         if args.slack or args.all:
             if config.get_slack_bot_token():
-                from .channels.slack import create_slack_channel
                 from .agent import create_agent
-                
+                from .channels.slack import create_slack_channel
+
                 agent = create_agent("slack")
                 slack_channel = create_slack_channel(
                     agent=agent,
@@ -131,26 +130,26 @@ def main():
                 print("💬 Slack Bot 已就绪")
             else:
                 print("⚠️  Slack 未配置，跳过")
-                
+
         # Telegram
         if args.telegram or args.all:
             token = config.get_telegram_token()
             if token:
-                from .channels.telegram import create_telegram_channel
                 from .agent import create_agent
-                
+                from .channels.telegram import create_telegram_channel
+
                 agent = create_agent("telegram")
                 telegram_channel = create_telegram_channel(agent=agent, token=token)
                 tasks.append(telegram_channel.start())
                 print("📱 Telegram Bot 已就绪")
             else:
                 print("⚠️  Telegram 未配置，跳过")
-                
+
         if tasks:
             # 运行所有服务的 start 方法
             await asyncio.gather(*tasks)
             print("火箭 所有 Bot 服务已启动")
-            
+
             # 保持异步事件循环运行，以免后台任务被终止
             try:
                 while True:

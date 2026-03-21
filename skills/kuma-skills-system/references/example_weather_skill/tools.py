@@ -50,7 +50,7 @@ def get_weather_forecast(city: str, days: int = 3) -> str:
         data = response.json()
         forecast_lines = [f"📍 {city} 未来 {days} 天天气预报：\n"]
 
-        for i, day in enumerate(data["weather"][:days]):
+        for _i, day in enumerate(data["weather"][:days]):
             date = day["date"]
             max_temp = day["maxtempC"]
             min_temp = day["mintempC"]

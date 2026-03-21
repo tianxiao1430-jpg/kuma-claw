@@ -7,6 +7,7 @@ IDENTITY - 可自定义的人设
 """
 
 from pathlib import Path
+
 from ..config import config
 
 

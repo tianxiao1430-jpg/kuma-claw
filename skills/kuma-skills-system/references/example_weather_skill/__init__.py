@@ -1,5 +1,5 @@
 """weather skill"""
+from .prompts import EXAMPLES, SYSTEM_PROMPT
 from .tools import TOOLS
-from .prompts import SYSTEM_PROMPT, EXAMPLES
 
 __all__ = ["TOOLS", "SYSTEM_PROMPT", "EXAMPLES"]

@@ -8,7 +8,8 @@ Kuma Claw Gateway - Adapter 基类
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Awaitable, Callable, Optional
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from .. import ChannelType, Message, Reply
 
@@ -23,7 +24,7 @@ class BaseAdapter(ABC):
 
     def __init__(self, gateway: Gateway):
         self.gateway = gateway
-        self.on_message: Optional[Callable[[Message], Awaitable[Reply]]] = None
+        self.on_message: Callable[[Message], Awaitable[Reply]] | None = None
 
     @abstractmethod
     async def start(self):

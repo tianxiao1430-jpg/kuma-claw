@@ -6,15 +6,14 @@ Web UI 启动
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, Request, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import FastAPI, Form, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from .config import config
 from .auth import OAuthFlow, token_manager
+from .config import config
 
 logger = logging.getLogger("kuma_claw.web_ui")
 
@@ -139,9 +138,9 @@ async def oauth_authorize():
 
 @app.get("/oauth/callback")
 async def oauth_callback(
-    code: Optional[str] = Query(None),
-    state: Optional[str] = Query(None),
-    error: Optional[str] = Query(None)
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None)
 ):
     """处理 Google OAuth 回调"""
     # 错误处理
@@ -194,7 +193,7 @@ async def oauth_callback(
             status_code=400
         )
 
-    with open(state_file, "r") as f:
+    with open(state_file) as f:
         saved_state = json.load(f)
 
     if state != saved_state["state"]:
