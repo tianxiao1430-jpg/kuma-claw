@@ -7,7 +7,6 @@ Kuma Claw - Agent 定义
 import logging
 import os
 from datetime import datetime
-from pathlib import Path
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
@@ -166,36 +165,23 @@ def _load_google_workspace_toolsets():
 
 
 # ============================================
-# Skills 工具
+# Skills 工具（统一从 kuma_claw.skills 加载）
 # ============================================
 
 
 def _load_and_register_skills(tools_list: list) -> int:
-    """加载 Skills 并注册工具"""
+    """加载 Skills 并注册工具（统一从 kuma_claw.skills 加载）"""
     try:
-        # 优先从 kuma_claw.skills 加载
-        try:
-            from .skills.skill_manager import skill_manager
+        from .skills.skill_manager import skill_manager
 
-            logger.info("从 kuma_claw.skills 加载 skill_manager")
-        except ImportError:
-            # 回退到外部路径
-            skills_path = Path(__file__).parent.parent / "skills" / "kuma-skills-system" / "scripts"
-            if (skills_path / "skill_manager.py").exists():
-                import sys
-
-                sys.path.insert(0, str(skills_path))
-                from skill_manager import skill_manager
-
-                logger.info(f"从 {skills_path} 加载 skill_manager")
-            else:
-                logger.warning("无法加载 skill_manager")
-                return 0
-
+        logger.info("从 kuma_claw.skills 加载 skill_manager")
         skill_manager.register_tools_to_agent(type("Agent", (), {"tools": tools_list})())
         tools = skill_manager.get_all_tools()
         logger.info(f"加载了 {len(tools)} 个 Skill 工具")
         return len(tools)
+    except ImportError as e:
+        logger.warning(f"skill_manager 不可用: {e}")
+        return 0
     except Exception as e:
         logger.error(f"加载 Skills 失败：{e}")
         return 0
