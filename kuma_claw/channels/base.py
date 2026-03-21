@@ -3,6 +3,7 @@ Kuma Claw - 渠道基类
 ==================
 
 所有渠道的公共逻辑（会话管理、Agent 运行）
+支持基于输入动态注入工具
 """
 
 import logging
@@ -13,7 +14,8 @@ from google.adk.runners import Runner
 from google.genai import types
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from .sessions import SQLiteSessionService
+from ..sessions import SQLiteSessionService
+from ..agent import get_dynamic_resources # 导入动态资源获取函数
 
 logger = logging.getLogger("kuma_claw.channels")
 
@@ -35,20 +37,8 @@ class SessionManager:
         user_id: str,
         session_key: Optional[str] = None
     ) -> str:
-        """获取或创建会话
-
-        Args:
-            user_id: 用户 ID
-            session_key: 会话键（可选）
-                        - 格式："{user_id}:{channel}:{thread_id}"
-                        - 不传则使用 user_id 作为键
-
-        Returns:
-            会话 ID
-        """
-        # 使用 session_key 或 user_id 作为键
+        """获取或创建会话"""
         key = session_key or user_id
-
         if key not in self.user_sessions:
             try:
                 session = await self.session_service.create_session(
@@ -56,30 +46,17 @@ class SessionManager:
                     user_id=user_id,
                     state={}
                 )
-
-                # 获取 session id
                 session_id = session.id if hasattr(session, 'id') else str(session)
                 self.user_sessions[key] = session_id
                 logger.debug(f"创建新会话：key={key}, session={session_id}")
-
             except Exception as e:
                 logger.error(f"创建会话失败：{e}")
                 raise
-
         return self.user_sessions[key]
 
     async def clear_session(self, user_id: str, session_key: Optional[str] = None) -> bool:
-        """清除会话
-
-        Args:
-            user_id: 用户 ID
-            session_key: 会话键（可选）
-
-        Returns:
-            是否成功
-        """
+        """清除会话"""
         key = session_key or user_id
-
         if key in self.user_sessions:
             session_id = self.user_sessions[key]
             try:
@@ -123,21 +100,7 @@ async def run_agent_with_session(
     parts: List[types.Part],
     session_key: Optional[str] = None,
 ) -> str:
-    """运行 Agent 并返回响应（带重试策略）
-
-    Args:
-        runner: ADK Runner 实例
-        session_manager: 会话管理器
-        user_id: 用户 ID
-        parts: 消息部分列表
-        session_key: 会话键（可选）
-
-    Returns:
-        Agent 响应文本
-
-    Raises:
-        LLMAPIError: LLM API 调用失败
-    """
+    """运行 Agent 并返回响应（带重试策略）"""
     try:
         session_id = await session_manager.get_or_create_session(
             user_id=user_id,
@@ -161,17 +124,9 @@ async def run_agent_with_session(
                 for part in event.content.parts:
                     if part.text:
                         response_text += part.text
-
         if not response_text:
             raise LLMAPIError("LLM 返回空响应")
-
         return response_text
-
-    except LLMAPIError:
-        raise
-    except TimeoutError as e:
-        logger.warning(f"LLM API 超时，将重试：{e}")
-        raise
     except Exception as e:
         logger.error(f"运行 Agent 失败：{e}")
         raise LLMAPIError(f"LLM API 调用失败：{str(e)}")
@@ -184,20 +139,7 @@ async def run_agent_with_session_fallback(
     parts: List[types.Part],
     session_key: Optional[str] = None,
 ) -> str:
-    """运行 Agent 并返回响应（带重试和降级处理）
-
-    这是 run_agent_with_session 的包装器，在重试失败后返回友好的错误消息。
-
-    Args:
-        runner: ADK Runner 实例
-        session_manager: 会话管理器
-        user_id: 用户 ID
-        parts: 消息部分列表
-        session_key: 会话键（可选）
-
-    Returns:
-        Agent 响应文本或错误消息
-    """
+    """带重试和降级处理的 Agent 运行器"""
     try:
         return await run_agent_with_session(
             runner=runner,
@@ -206,12 +148,9 @@ async def run_agent_with_session_fallback(
             parts=parts,
             session_key=session_key,
         )
-    except LLMAPIError as e:
-        logger.error(f"LLM API 调用失败（重试耗尽）：{e}")
-        return "抱歉，服务暂时不可用，请稍后重试。"
     except Exception as e:
-        logger.error(f"运行 Agent 失败：{e}")
-        return f"处理请求时出错：{str(e)}"
+        logger.error(f"运行 Agent 失败（降级处理）：{e}")
+        return "抱歉，服务暂时不可用，请稍后重试。"
 
 
 # ============================================
@@ -226,37 +165,25 @@ class ChannelHandler(ABC):
         self.agent = agent
         self.session_manager = SessionManager(db_path=db_path)
 
-        # 创建 Runner（使用持久化会话服务）
+        # 创建 Runner
         self.runner = Runner(
             app_name="kuma-claw",
             agent=agent,
             session_service=self.session_manager.session_service,
         )
 
-        logger.info(f"{channel_name} 渠道已初始化（使用 SQLite 持久化会话）")
+        logger.info(f"{channel_name} 渠道已初始化（支持动态工具注入）")
 
     @abstractmethod
     async def handle_message(self, user_id: str, text: str, **kwargs) -> str:
-        """处理消息（子类实现）
-
-        Args:
-            user_id: 用户 ID
-            text: 消息文本
-            **kwargs: 渠道特定参数
-
-        Returns:
-            响应文本
-        """
         pass
 
     @abstractmethod
     async def start(self):
-        """启动渠道（子类实现）"""
         pass
 
     @abstractmethod
     async def stop(self):
-        """停止渠道（子类实现）"""
         pass
 
     async def run_agent(
@@ -266,33 +193,24 @@ class ChannelHandler(ABC):
         images: List[Tuple[bytes, str]] = None,
         session_key: Optional[str] = None
     ) -> str:
-        """运行 Agent（公共逻辑）
+        """运行 Agent（核心逻辑：支持动态工具注入）"""
+        
+        # --- 动态工具注入逻辑 ---
+        try:
+            # 根据用户输入检索相关工具
+            dynamic_tools = get_dynamic_resources(text)
+            # 更新 Agent 的工具列表
+            self.agent.tools = dynamic_tools
+            logger.debug(f"已为当前请求注入 {len(dynamic_tools)} 个工具")
+        except Exception as e:
+            logger.error(f"动态工具注入失败：{e}")
+        # -----------------------
 
-        Args:
-            user_id: 用户 ID
-            text: 消息文本
-            images: 图片列表，格式为 [(bytes, mime_type), ...]
-            session_key: 会话键（可选）
-                        - 用于隔离不同会话的上下文
-                        - 格式建议："{user_id}:{channel}:{thread_id}"
-
-        Returns:
-            Agent 响应
-        """
         parts = [types.Part(text=text)]
-
-        # 添加图片（如果有）
         if images:
             for img_bytes, mime_type in images:
-                if not isinstance(img_bytes, bytes):
-                    logger.warning(f"图片数据类型错误：{type(img_bytes)}，跳过")
-                    continue
-
                 parts.append(types.Part(
-                    inline_data=types.Blob(
-                        mime_type=mime_type,
-                        data=img_bytes
-                    )
+                    inline_data=types.Blob(mime_type=mime_type, data=img_bytes)
                 ))
 
         return await run_agent_with_session_fallback(
@@ -304,6 +222,4 @@ class ChannelHandler(ABC):
         )
 
     async def cleanup(self):
-        """清理资源（在应用关闭时调用）"""
         await self.session_manager.close()
-        logger.info(f"{self.channel_name} 渠道已清理")

@@ -280,7 +280,7 @@ class Skill:
             'sum': sum,
             'tuple': tuple,
             'type': type,
-            'zip': zip,
+            'zip': zip, '__import__': __import__,
             'Exception': Exception,
             'ValueError': ValueError,
             'TypeError': TypeError,
