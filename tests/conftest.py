@@ -1,7 +1,4 @@
-"""
-Pytest 配置文件
-==============
-"""
+"""Pytest 配置文件"""
 import pytest
 import sys
 from pathlib import Path
@@ -27,3 +24,21 @@ def sample_text():
 def sample_user_id():
     """示例用户 ID"""
     return "test_user_123"
+
+
+@pytest.fixture(autouse=True)
+def reset_agent_cache():
+    """自动重置 Agent 缓存（测试隔离）"""
+    from kuma_claw.agent import reset_cache
+    reset_cache()
+    yield
+    reset_cache()
+
+
+@pytest.fixture(autouse=True)
+def reset_config():
+    """自动重置配置（测试隔离）"""
+    from kuma_claw import config as config_module
+    original_config = config_module.config
+    yield
+    config_module.config = original_config

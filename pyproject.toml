@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kuma-claw"
-version = "0.1.0"
+version = "0.1.1"
 description = "🦞 Kuma Claw - 智能 Agent 平台，基于 Google ADK"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -24,28 +24,30 @@ classifiers = [
 ]
 
 dependencies = [
-    "google-adk>=0.1.0",
-    "google-genai>=0.3.0",
-    "slack-bolt>=1.18.0",
-    "python-telegram-bot>=20.0",
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "websockets>=12.0",
-    "jinja2>=3.1.0",
-    "python-multipart>=0.0.6",
-    "click>=8.1.0",
-    "rich>=13.0.0",
-    "requests>=2.31.0",
-    "python-dotenv>=1.0.0",
-    "ddgs>=9.0.0",
-    "aiohttp>=3.9.0",
+    "google-adk~=0.1.0",
+    "google-genai~=0.3.0",
+    "slack-bolt~=1.18.0",
+    "python-telegram-bot~=20.0",
+    "fastapi~=0.104.0",
+    "uvicorn~=0.24.0",
+    "websockets~=12.0",
+    "jinja2~=3.1.0",
+    "python-multipart~=0.0.6",
+    "click~=8.1.0",
+    "rich~=13.0.0",
+    "keyring~=24.0.0",
+    "requests~=2.31.0",
+    "python-dotenv~=1.0.0",
+    "duckduckgo-search~=6.0.0",
+    "tenacity~=8.2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "black>=23.0.0",
-    "ruff>=0.1.0",
+    "pytest~=7.4.0",
+    "pytest-asyncio~=0.21.0",
+    "pytest-cov~=4.1.0",
+    "ruff~=0.1.0",
 ]
 
 [project.scripts]
@@ -61,10 +63,15 @@ Issues = "https://github.com/tianxiao1430-jpg/kuma-claw/issues"
 where = ["."]
 include = ["kuma_claw*"]
 
-[tool.black]
-line-length = 88
-target-version = ["py310"]
-
 [tool.ruff]
-line-length = 88
-select = ["E", "F", "W", "I"]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
