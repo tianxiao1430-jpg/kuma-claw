@@ -308,6 +308,18 @@ class ChannelHandler(ABC):
             logger.error(f"记录助手响应失败：{e}")
         # ------------------------------
 
+        # 手动更新 session state（ADK 可能不会自动保存）
+        try:
+            await self.session_service.update_session(
+                app_name="kuma-claw",
+                user_id=user_id,
+                session_id=session_id,
+                state={"last_message": response}
+            )
+            logger.info(f"手动更新 session state: {session_id}")
+        except Exception as e:
+            logger.error(f"手动更新 session 失败：{e}")
+
         return response
 
 
