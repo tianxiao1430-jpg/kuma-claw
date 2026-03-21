@@ -4,6 +4,7 @@ Telegram 渠道处理器
 """
 
 import logging
+import httpx
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
@@ -131,14 +132,19 @@ class TelegramChannel(ChannelHandler):
         photo = update.message.photo[-1]
         text = update.message.caption or "请分析这张图片"
 
-        # 获取图片文件
+        # 获取图片文件并下载为 bytes
         photo_file = await context.bot.get_file(photo.file_id)
         photo_url = photo_file.file_path
+        
+        # 下载图片
+        async with httpx.AsyncClient() as client:
+            response = await client.get(photo_url)
+            photo_bytes = response.content
 
         # 运行 Agent（带图片）
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-        response = await self.run_agent(user_id, text, images=[photo_url])
+        response = await self.run_agent(user_id, text, images=[(photo_bytes, "image/jpeg")])
         _, final_response = extract_internal_content(response)
 
         await update.message.reply_text(final_response)
