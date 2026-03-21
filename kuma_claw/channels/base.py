@@ -255,10 +255,15 @@ class ChannelHandler(ABC):
         # -----------------------
 
 
+        # 先获取 session_id 用于记忆记录
+        session_id = await self.session_manager.get_or_create_session(
+            user_id=user_id, session_key=session_key
+        )
+
         # --- 记录会话到记忆库 (SQLite) ---
         try:
             from ..memory import memory_manager
-            memory_manager.add_session_message(user_id, "user", text)
+            memory_manager.add_session_message(session_id, "user", text)
         except Exception as e:
             logger.error(f"记录用户消息失败: {e}")
         # ------------------------------
@@ -287,7 +292,7 @@ class ChannelHandler(ABC):
         # --- 记录响应到记忆库 (SQLite) ---
         try:
             from ..memory import memory_manager
-            memory_manager.add_session_message(user_id, "assistant", response)
+            memory_manager.add_session_message(session_id, "assistant", response)
         except Exception as e:
             logger.error(f"记录助手响应失败: {e}")
         # ------------------------------
