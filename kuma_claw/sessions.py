@@ -15,9 +15,9 @@ from typing import Any, Optional
 
 from google.adk.sessions import (
     BaseSessionService,
-    GetSessionConfig,
-    ListSessionsResponse,
-    Session,
+    GetSessionConfig
+    ListSessionsResponse
+    Session
 )
 
 logger = logging.getLogger("kuma_claw")
@@ -34,7 +34,7 @@ class SQLiteSessionService(BaseSessionService):
         self._local = threading.local()
         self._lock = threading.Lock()
         self._init_db()
-        logger.info(f"SQLite 会话服务已初始化：{self.db_path}")
+        logger.info(f"SQLite 会话服务已初始化: {self.db_path}")
 
     def _get_conn(self) -> sqlite3.Connection:
         """获取线程本地连接"""
@@ -84,7 +84,7 @@ class SQLiteSessionService(BaseSessionService):
             )
             self._get_conn().commit()
 
-        logger.debug(f"创建会话：id={session_id}")
+        logger.debug(f"创建会话: id={session_id}")
         return Session(
             id=session_id,
             app_name=app_name,
@@ -154,18 +154,23 @@ class SQLiteSessionService(BaseSessionService):
                     .fetchall()
                 )
 
-        sessions = [
-            Session(
-                id=r["id"],
-                app_name=r["app_name"],
-                user_id=r["user_id"],
-                state=json.loads(r["state"]),
-                last_update_time=datetime.fromisoformat(r["updated_at"]).timestamp()
-                if r["updated_at"]
-                else 0.0,
+        sessions = []
+        for r in rows:
+            try:
+                last_update_time = datetime.fromisoformat(r["updated_at"]).timestamp()
+            except Exception:
+                last_update_time = 0.0
+
+            sessions.append(
+                Session(
+                    id=r["id"],
+                    app_name=r["app_name"],
+                    user_id=r["user_id"],
+                    state=json.loads(r["state"]),
+                    last_update_time=last_update_time,
+                )
             )
-            for r in rows
-        ]
+
         return ListSessionsResponse(sessions=sessions)
 
     async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
@@ -179,7 +184,7 @@ class SQLiteSessionService(BaseSessionService):
 
         deleted = cursor.rowcount > 0
         if deleted:
-            logger.debug(f"删除会话：id={session_id}")
+            logger.debug(f"删除会话: id={session_id}")
 
     async def close(self):
         """关闭连接"""
