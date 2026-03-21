@@ -6,12 +6,11 @@ Kuma Claw - 渠道基类
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
 from abc import ABC, abstractmethod
 
 from google.adk.runners import Runner
 from google.genai import types
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from ..sessions import SQLiteSessionService
 
@@ -25,15 +24,15 @@ logger = logging.getLogger("kuma_claw.channels")
 class SessionManager:
     """统一的会话管理器（使用 SQLite 持久化）"""
 
-    def __init__(self, app_name: str = "kuma-claw", db_path: Optional[str] = None):
+    def __init__(self, app_name: str = "kuma-claw", db_path: str | None = None):
         self.app_name = app_name
         self.session_service = SQLiteSessionService(db_path=db_path)
-        self.user_sessions: Dict[str, str] = {}  # session_key -> session_id
+        self.user_sessions: dict[str, str] = {}  # session_key -> session_id
 
     async def get_or_create_session(
         self,
         user_id: str,
-        session_key: Optional[str] = None
+        session_key: str | None = None
     ) -> str:
         """获取或创建会话
 
@@ -58,7 +57,7 @@ class SessionManager:
                 )
 
                 # 获取 session id
-                session_id = session.id if hasattr(session, 'id') else str(session)
+                session_id = session.id if hasattr(session, "id") else str(session)
                 self.user_sessions[key] = session_id
                 logger.debug(f"创建新会话：key={key}, session={session_id}")
 
@@ -68,7 +67,7 @@ class SessionManager:
 
         return self.user_sessions[key]
 
-    async def clear_session(self, user_id: str, session_key: Optional[str] = None) -> bool:
+    async def clear_session(self, user_id: str, session_key: str | None = None) -> bool:
         """清除会话
 
         Args:
@@ -120,8 +119,8 @@ async def run_agent_with_session(
     runner: Runner,
     session_manager: SessionManager,
     user_id: str,
-    parts: List[types.Part],
-    session_key: Optional[str] = None,
+    parts: list[types.Part],
+    session_key: str | None = None,
 ) -> str:
     """运行 Agent 并返回响应（带重试策略）
 
@@ -181,8 +180,8 @@ async def run_agent_with_session_fallback(
     runner: Runner,
     session_manager: SessionManager,
     user_id: str,
-    parts: List[types.Part],
-    session_key: Optional[str] = None,
+    parts: list[types.Part],
+    session_key: str | None = None,
 ) -> str:
     """运行 Agent 并返回响应（带重试和降级处理）
 
@@ -221,7 +220,7 @@ async def run_agent_with_session_fallback(
 class ChannelHandler(ABC):
     """渠道处理器基类"""
 
-    def __init__(self, channel_name: str, agent, db_path: Optional[str] = None):
+    def __init__(self, channel_name: str, agent, db_path: str | None = None):
         self.channel_name = channel_name
         self.agent = agent
         self.session_manager = SessionManager(db_path=db_path)
@@ -263,8 +262,8 @@ class ChannelHandler(ABC):
         self,
         user_id: str,
         text: str,
-        images: List[Tuple[bytes, str]] = None,
-        session_key: Optional[str] = None
+        images: list[tuple[bytes, str]] | None = None,
+        session_key: str | None = None
     ) -> str:
         """运行 Agent（公共逻辑）
 
