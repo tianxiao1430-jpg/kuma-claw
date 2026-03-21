@@ -310,7 +310,7 @@ class ChannelHandler(ABC):
 
         # 手动更新 session state（ADK 可能不会自动保存）
         try:
-            await self.session_service.update_session(
+            await self.session_manager.session_service.update_session(
                 app_name="kuma-claw",
                 user_id=user_id,
                 session_id=session_id,
