@@ -3,19 +3,17 @@ Kuma Claw - OAuth 认证管理
 ========================
 """
 
-import os
 import json
-import webbrowser
+import os
 import secrets
 import threading
-from pathlib import Path
-from typing import Optional, Dict
+import webbrowser
 from datetime import datetime, timedelta
-from urllib.parse import urlencode, urlparse, parse_qs, parse_qsl
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 import httpx
-
 
 # ============================================
 # 配置
@@ -27,7 +25,7 @@ OAUTH_TOKENS_FILE = Path.home() / ".kuma-claw" / "oauth_tokens.json"
 # 用户无需自己创建，直接使用官方 Client ID 即可
 ADKCLAW_OFFICIAL_CLIENT_ID = os.environ.get(
     "ADKCLAW_CLIENT_ID",
-    ""  # 占位符，需要填写真实 Client ID
+    "",  # 占位符，需要填写真实 Client ID
 )
 
 # Google OAuth 配置
@@ -50,6 +48,7 @@ GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 # Token 管理器
 # ============================================
 
+
 class OAuthTokenManager:
     """OAuth Token 管理器"""
 
@@ -57,17 +56,17 @@ class OAuthTokenManager:
         self.tokens_file = OAUTH_TOKENS_FILE
         self.tokens = self._load_tokens()
 
-    def _load_tokens(self) -> Dict:
+    def _load_tokens(self) -> dict:
         """加载 Token"""
         if self.tokens_file.exists():
-            with open(self.tokens_file, "r") as f:
+            with self.tokens_file.open("r") as f:
                 return json.load(f)
         return {}
 
     def _save_tokens(self):
         """保存 Token"""
         self.tokens_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.tokens_file, "w") as f:
+        with self.tokens_file.open("w") as f:
             json.dump(self.tokens, f, indent=2)
 
     def save_google_tokens(self, access_token: str, refresh_token: str, expires_in: int):
@@ -76,11 +75,11 @@ class OAuthTokenManager:
             "access_token": access_token,
             "refresh_token": refresh_token,
             "expires_at": (datetime.now() + timedelta(seconds=expires_in)).isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now().isoformat(),
         }
         self._save_tokens()
 
-    def get_google_tokens(self) -> Optional[Dict]:
+    def get_google_tokens(self) -> dict | None:
         """获取 Google Token"""
         return self.tokens.get("google")
 
@@ -94,7 +93,7 @@ class OAuthTokenManager:
         # 提前 5 分钟认为过期
         return datetime.now() >= (expires_at - timedelta(minutes=5))
 
-    def refresh_google_token(self, client_id: str, client_secret: str = "") -> Optional[str]:
+    def refresh_google_token(self, client_id: str, client_secret: str = "") -> str | None:
         """刷新 Google Token"""
         tokens = self.get_google_tokens()
         if not tokens:
@@ -110,11 +109,7 @@ class OAuthTokenManager:
             if client_secret:
                 data["client_secret"] = client_secret
 
-            response = httpx.post(
-                GOOGLE_OAUTH_TOKEN_URL,
-                data=data,
-                timeout=30.0
-            )
+            response = httpx.post(GOOGLE_OAUTH_TOKEN_URL, data=data, timeout=30.0)
             response.raise_for_status()
             token_data = response.json()
 
@@ -122,7 +117,7 @@ class OAuthTokenManager:
             self.save_google_tokens(
                 access_token=token_data["access_token"],
                 refresh_token=tokens["refresh_token"],  # refresh_token 不变
-                expires_in=token_data["expires_in"]
+                expires_in=token_data["expires_in"],
             )
 
             return token_data["access_token"]
@@ -130,7 +125,7 @@ class OAuthTokenManager:
             print(f"刷新 Token 失败: {e}")
             return None
 
-    def get_valid_access_token(self, client_id: str, client_secret: str = "") -> Optional[str]:
+    def get_valid_access_token(self, client_id: str, client_secret: str = "") -> str | None:
         """获取有效的 access_token（自动刷新）"""
         tokens = self.get_google_tokens()
         if not tokens:
@@ -151,6 +146,7 @@ class OAuthTokenManager:
 # ============================================
 # OAuth 授权流程
 # ============================================
+
 
 class OAuthFlow:
     """OAuth 授权流程"""
@@ -175,7 +171,7 @@ class OAuthFlow:
         }
         return f"{GOOGLE_OAUTH_AUTH_URL}?{urlencode(params)}"
 
-    def exchange_code_for_tokens(self, code: str) -> Dict:
+    def exchange_code_for_tokens(self, code: str) -> dict:
         """用授权码换取 Token"""
         data = {
             "client_id": self.client_id,
@@ -187,11 +183,7 @@ class OAuthFlow:
         if self.client_secret:
             data["client_secret"] = self.client_secret
 
-        response = httpx.post(
-            GOOGLE_OAUTH_TOKEN_URL,
-            data=data,
-            timeout=30.0
-        )
+        response = httpx.post(GOOGLE_OAUTH_TOKEN_URL, data=data, timeout=30.0)
         response.raise_for_status()
         return response.json()
 
@@ -202,11 +194,11 @@ class OAuthFlow:
             是否成功启动
         """
         auth_url = self.get_authorization_url()
-        
+
         # 创建回调接收器
         callback_received = {"code": None, "error": None}
         server_ready = threading.Event()
-        
+
         class OAuthCallbackHandler(BaseHTTPRequestHandler):
             def do_GET(self):
                 parsed = urlparse(self.path)
@@ -217,66 +209,74 @@ class OAuthFlow:
                         self.send_response(200)
                         self.send_header("Content-type", "text/html")
                         self.end_headers()
-                        self.wfile.write("<html><body><h1>✅ 授权成功！</h1><p>您可以关闭此页面，返回 CLI 继续操作。</p></body></html>".encode("utf-8"))
+                        self.wfile.write(
+                            "<html><body><h1>✅ 授权成功！</h1>"
+                            "<p>您可以关闭此页面，返回 CLI 继续操作。</p></body></html>".encode()
+                        )
                     elif "error" in params:
                         callback_received["error"] = params["error"]
                         self.send_response(200)
                         self.send_header("Content-type", "text/html")
                         self.end_headers()
-                        self.wfile.write(f"<html><body><h1>❌ 授权失败</h1><p>Error: {params['error']}</p></body></html>".encode("utf-8"))
+                        error_msg = params["error"].encode()
+                        self.wfile.write(
+                            "<html><body><h1>❌ 授权失败</h1><p>Error: %s</p></body></html>".encode()
+                            % error_msg
+                        )
                     else:
                         self.send_response(400)
                         self.end_headers()
                 else:
                     self.send_response(404)
                     self.end_headers()
-            
+
             def log_message(self, format, *args):
                 pass  # 静默日志
-        
+
         # 启动临时服务器
         server = HTTPServer(("localhost", self.redirect_port), OAuthCallbackHandler)
         server.timeout = 300  # 5 分钟超时
-        
+
         def run_server():
             server_ready.set()
             server.handle_request()  # 只处理一次请求
-        
+
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
-        
+
         # 等待服务器启动
         server_ready.wait(timeout=5)
-        
-        print(f"\n🌐 正在打开浏览器进行授权...")
-        print(f"   如果浏览器没有自动打开，请访问：")
+
+        print("\n🌐 正在打开浏览器进行授权...")
+        print("   如果浏览器没有自动打开，请访问：")
         print(f"   {auth_url}\n")
-        
+
         # 打开浏览器
         webbrowser.open(auth_url)
-        
+
         # 等待回调
         print("[dim]等待授权完成...（最多 5 分钟）[/dim]")
         server_thread.join(timeout=300)
-        
+
         if callback_received["error"]:
             print(f"\n[red]❌ 授权失败：{callback_received['error']}[/red]")
             return False
         elif callback_received["code"]:
-            print(f"\n[green]✅ 授权成功！正在换取 Token...[/green]")
+            print("\n[green]✅ 授权成功！正在换取 Token...[/green]")
             # 用 code 换取 tokens
             tokens = self.exchange_code_for_tokens(callback_received["code"])
             # 保存 tokens
             from .auth import token_manager
+
             token_manager.save_google_tokens(
                 access_token=tokens["access_token"],
                 refresh_token=tokens.get("refresh_token", ""),
-                expires_in=tokens["expires_in"]
+                expires_in=tokens["expires_in"],
             )
-            print(f"[green]✅ Token 已保存[/green]")
+            print("[green]✅ Token 已保存[/green]")
             return True
         else:
-            print(f"\n[yellow]⚠️  授权超时，请重试[/yellow]")
+            print("\n[yellow]⚠️  授权超时，请重试[/yellow]")
             return False
 
 
@@ -284,7 +284,8 @@ class OAuthFlow:
 # 便捷函数
 # ============================================
 
-def get_oauth_client_id(config_client_id: Optional[str] = None) -> str:
+
+def get_oauth_client_id(config_client_id: str | None = None) -> str:
     """获取 OAuth Client ID
 
     优先级：

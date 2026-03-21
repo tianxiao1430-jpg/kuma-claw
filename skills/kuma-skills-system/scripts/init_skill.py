@@ -84,14 +84,16 @@ EXAMPLES = [
 
     # 创建 __init__.py
     with open(skill_dir / "__init__.py", "w") as f:
-        f.write(f'"""{skill_name} skill"""\nfrom .tools import TOOLS\nfrom .prompts import SYSTEM_PROMPT, EXAMPLES\n')
+        f.write(
+            f'"""{skill_name} skill"""\nfrom .tools import TOOLS\nfrom .prompts import SYSTEM_PROMPT, EXAMPLES\n'
+        )
 
     print(f"✅ Skill '{skill_name}' 初始化成功")
     print(f"   位置: {skill_dir}")
-    print(f"\n下一步:")
-    print(f"1. 编辑 skill.json 添加触发词和工具定义")
-    print(f"2. 实现 tools.py 中的工具函数")
-    print(f"3. 完善 prompts.py 中的系统提示词")
+    print("\n下一步:")
+    print("1. 编辑 skill.json 添加触发词和工具定义")
+    print("2. 实现 tools.py 中的工具函数")
+    print("3. 完善 prompts.py 中的系统提示词")
 
 
 def main():

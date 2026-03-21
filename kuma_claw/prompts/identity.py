@@ -7,6 +7,7 @@ IDENTITY - 可自定义的人设
 """
 
 from pathlib import Path
+
 from ..config import config
 
 
@@ -93,6 +94,7 @@ _I am {agent_name} — built on Google ADK. Open source, local-first, yours to c
 # ============================================
 # 便捷函数
 # ============================================
+
 
 def set_identity(name: str = None, prompt: str = None):
     """设置人设"""

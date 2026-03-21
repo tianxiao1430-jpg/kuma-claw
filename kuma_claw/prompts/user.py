@@ -6,6 +6,7 @@ USER - 用户背景和偏好
 """
 
 from pathlib import Path
+
 from ..config import config
 
 
@@ -65,16 +66,17 @@ def get_user_context() -> str:
 # 便捷函数
 # ============================================
 
+
 def set_user_info(
-    name: str = None,
-    timezone: str = None,
-    language: str = None,
-    company: str = None,
-    role: str = None,
-    industry: str = None,
-    communication_style: str = None,
-    technical_level: str = None,
-    custom_prompt: str = None,
+    name: str | None = None,
+    timezone: str | None = None,
+    language: str | None = None,
+    company: str | None = None,
+    role: str | None = None,
+    industry: str | None = None,
+    communication_style: str | None = None,
+    technical_level: str | None = None,
+    custom_prompt: str | None = None,
 ):
     """设置用户信息"""
     user_config = config.config.setdefault("user", {})

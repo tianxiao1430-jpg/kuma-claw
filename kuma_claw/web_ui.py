@@ -6,15 +6,14 @@ Web UI 启动
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, Request, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import FastAPI, Form, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from .config import config
 from .auth import OAuthFlow, token_manager
+from .config import config
 
 logger = logging.getLogger("kuma_claw.web_ui")
 
@@ -33,22 +32,26 @@ async def index(request: Request):
     oauth_configured = bool(client_id)
     oauth_authorized = bool(tokens)
 
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "config": config.config,
-        "has_google_key": bool(config.get_google_api_key()),
-        "has_openai_key": bool(config.get_openai_api_key()),
-        "has_anthropic_key": bool(config.get_anthropic_api_key()),
-        "slack_enabled": config.is_slack_enabled(),
-        "telegram_enabled": config.is_telegram_enabled(),
-        "oauth_configured": oauth_configured,
-        "oauth_authorized": oauth_authorized,
-    })
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "config": config.config,
+            "has_google_key": bool(config.get_google_api_key()),
+            "has_openai_key": bool(config.get_openai_api_key()),
+            "has_anthropic_key": bool(config.get_anthropic_api_key()),
+            "slack_enabled": config.is_slack_enabled(),
+            "telegram_enabled": config.is_telegram_enabled(),
+            "oauth_configured": oauth_configured,
+            "oauth_authorized": oauth_authorized,
+        },
+    )
 
 
 # ============================================
 # API Keys
 # ============================================
+
 
 @app.post("/api/model")
 async def set_model(model: str = Form(...)):
@@ -82,6 +85,7 @@ async def set_anthropic_key(api_key: str = Form(...)):
 # Channels
 # ============================================
 
+
 @app.post("/api/slack")
 async def set_slack(bot_token: str = Form(...), app_token: str = Form(...)):
     """设置 Slack"""
@@ -100,6 +104,7 @@ async def set_telegram(token: str = Form(...)):
 # OAuth
 # ============================================
 
+
 @app.post("/api/google-oauth")
 async def set_google_oauth(client_id: str = Form(...), client_secret: str = Form(...)):
     """设置 Google OAuth"""
@@ -115,8 +120,7 @@ async def oauth_authorize():
 
     if not client_id or not client_secret:
         return HTMLResponse(
-            content="<h1>❌ OAuth 未配置</h1><p>请先配置 Google OAuth 凭证</p>",
-            status_code=400
+            content="<h1>❌ OAuth 未配置</h1><p>请先配置 Google OAuth 凭证</p>", status_code=400
         )
 
     # 创建 OAuth 流程
@@ -126,11 +130,14 @@ async def oauth_authorize():
     state_file = Path.home() / ".kuma-claw" / "oauth_state.json"
     state_file.parent.mkdir(parents=True, exist_ok=True)
     with open(state_file, "w") as f:
-        json.dump({
-            "state": flow.state,
-            "client_id": client_id,
-            "client_secret": client_secret,
-        }, f)
+        json.dump(
+            {
+                "state": flow.state,
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            f,
+        )
 
     # 重定向到 Google
     auth_url = flow.get_authorization_url()
@@ -139,9 +146,7 @@ async def oauth_authorize():
 
 @app.get("/oauth/callback")
 async def oauth_callback(
-    code: Optional[str] = Query(None),
-    state: Optional[str] = Query(None),
-    error: Optional[str] = Query(None)
+    code: str | None = Query(None), state: str | None = Query(None), error: str | None = Query(None)
 ):
     """处理 Google OAuth 回调"""
     # 错误处理
@@ -158,7 +163,7 @@ async def oauth_callback(
             </body>
             </html>
             """,
-            status_code=400
+            status_code=400,
         )
 
     # 缺少参数
@@ -174,7 +179,7 @@ async def oauth_callback(
             </body>
             </html>
             """,
-            status_code=400
+            status_code=400,
         )
 
     # 验证 state
@@ -191,10 +196,10 @@ async def oauth_callback(
             </body>
             </html>
             """,
-            status_code=400
+            status_code=400,
         )
 
-    with open(state_file, "r") as f:
+    with open(state_file) as f:
         saved_state = json.load(f)
 
     if state != saved_state["state"]:
@@ -209,7 +214,7 @@ async def oauth_callback(
             </body>
             </html>
             """,
-            status_code=400
+            status_code=400,
         )
 
     # 换取 Token
@@ -224,7 +229,7 @@ async def oauth_callback(
         token_manager.save_google_tokens(
             access_token=tokens["access_token"],
             refresh_token=tokens["refresh_token"],
-            expires_in=tokens["expires_in"]
+            expires_in=tokens["expires_in"],
         )
 
         # 清理 state 文件
@@ -264,7 +269,7 @@ async def oauth_callback(
             </body>
             </html>
             """,
-            status_code=500
+            status_code=500,
         )
 
 
@@ -272,6 +277,7 @@ async def oauth_callback(
 async def service_status():
     """获取各渠道实时运行状态（供前端轮询）"""
     from .service_registry import get_all as registry_get_all
+
     status = registry_get_all()
 
     # 对未注册的渠道，根据配置返回 disabled
@@ -289,11 +295,13 @@ async def oauth_status():
     client_id = config.get_google_oauth_client_id()
     tokens = token_manager.get_google_tokens()
 
-    return JSONResponse({
-        "configured": bool(client_id),
-        "authorized": bool(tokens),
-        "expired": token_manager.token_expired() if tokens else True,
-    })
+    return JSONResponse(
+        {
+            "configured": bool(client_id),
+            "authorized": bool(tokens),
+            "expired": token_manager.token_expired() if tokens else True,
+        }
+    )
 
 
 @app.post("/api/oauth/clear")
@@ -306,6 +314,7 @@ async def oauth_clear():
 # ============================================
 # 启动
 # ============================================
+
 
 def start_web_ui(host: str = "0.0.0.0", port: int = 8080):
     """启动 Web UI"""
