@@ -266,7 +266,31 @@ class ChannelHandler(ABC):
             logger.error(f"动态工具注入失败：{e}")
         # -----------------------
 
-        parts = [types.Part(text=text)]
+        # 获取 session_id 用于记忆记录和加载历史
+        session_id = await self.session_manager.get_or_create_session(
+            user_id=user_id, session_key=session_key
+        )
+
+        # 从记忆库加载最近的对话历史（bot 重启后恢复上下文）
+        history_context = ""
+        try:
+            from ..memory import memory_manager
+            history = memory_manager.get_session_messages(session_id, limit=10)
+            if history:
+                history_lines = []
+                for msg in history:
+                    role = "用户" if msg["role"] == "user" else "助手"
+                    history_lines.append(f"{role}: {msg['content']}")
+                history_context = "\n".join(reversed(history_lines))
+                logger.debug(f"加载了 {len(history)} 条历史消息")
+        except Exception as e:
+            logger.error(f"加载历史消息失败：{e}")
+
+        # 构建消息 parts（如果有历史，作为上下文前置）
+        parts = []
+        if history_context:
+            parts.append(types.Part(text=f"以下是之前的对话历史：\n{history_context}\n\n---\n\n当前用户消息："))
+        parts.append(types.Part(text=text))
 
         # 添加图片 (如果有)
         if images:
@@ -278,11 +302,6 @@ class ChannelHandler(ABC):
                 parts.append(
                     types.Part(inline_data=types.Blob(mime_type=mime_type, data=img_bytes))
                 )
-
-        # 获取 session_id 用于记忆记录
-        session_id = await self.session_manager.get_or_create_session(
-            user_id=user_id, session_key=session_key
-        )
 
         # --- 记录会话到记忆库 (SQLite) ---
         try:
