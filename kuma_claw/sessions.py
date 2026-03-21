@@ -83,8 +83,7 @@ class SQLiteSessionService:
             app_name=app_name,
             user_id=user_id,
             state=state,
-            created_at=now,
-            updated_at=now,
+            last_update_time=now,
         )
 
     async def get_session(self, app_name: str, user_id: str, session_id: str) -> Session | None:
@@ -107,8 +106,7 @@ class SQLiteSessionService:
             app_name=row["app_name"],
             user_id=row["user_id"],
             state=json.loads(row["state"]),
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
+            last_update_time=row["updated_at"],
         )
 
     async def update_session(
@@ -130,8 +128,7 @@ class SQLiteSessionService:
             app_name=app_name,
             user_id=user_id,
             state=state,
-            created_at=now,
-            updated_at=now,
+            last_update_time=now,
         )
 
     async def delete_session(self, app_name: str, user_id: str, session_id: str) -> bool:
@@ -167,8 +164,7 @@ class SQLiteSessionService:
                 app_name=r["app_name"],
                 user_id=r["user_id"],
                 state=json.loads(r["state"]),
-                created_at=r["created_at"],
-                updated_at=r["updated_at"],
+                last_update_time=r["updated_at"],
             )
             for r in rows
         ]
