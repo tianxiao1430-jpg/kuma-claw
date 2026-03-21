@@ -1,0 +1,7 @@
+{
+  "name": "weather-skill",
+  "version": "1.0.0",
+  "description": "获取实时天气信息的技能",
+  "triggers": ["天气", "气温", "weather", "temperature"],
+  "author": "kuma"
+}

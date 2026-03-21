@@ -3,6 +3,7 @@ Kuma Claw - 渠道基类
 ==================
 
 所有渠道的公共逻辑（会话管理、 Agent 运行）
+支持基于输入动态注入工具
 """
 
 import logging
@@ -12,6 +13,7 @@ from google.adk.runners import Runner
 from google.genai import types
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from ..agent import get_tools  # 导入动态资源获取函数
 from ..sessions import SQLiteSessionService
 
 logger = logging.getLogger("kuma_claw.channels")
@@ -44,7 +46,6 @@ class SessionManager:
         """
         # 使用 session_key 或 user_id 作为键
         key = session_key or user_id
-
         if key not in self.user_sessions:
             try:
                 session = await self.session_service.create_session(
@@ -59,7 +60,6 @@ class SessionManager:
             except Exception as e:
                 logger.error(f"创建会话失败: {e}")
                 raise
-
         return self.user_sessions[key]
 
     async def clear_session(self, user_id: str, session_key: str | None = None) -> bool:
@@ -73,7 +73,6 @@ class SessionManager:
             是否成功
         """
         key = session_key or user_id
-
         if key in self.user_sessions:
             session_id = self.user_sessions[key]
             try:
@@ -117,21 +116,7 @@ async def run_agent_with_session(
     parts: list[types.Part],
     session_key: str | None = None,
 ) -> str:
-    """运行 Agent 并返回响应（带重试策略）
-
-    Args:
-        runner: ADK Runner 实例
-        session_manager: 会话管理器
-        user_id: 用户 ID
-        parts: 消息部分列表
-        session_key: 会话键（可选）
-
-    Returns:
-        Agent 响应文本
-
-    Raises:
-        LLMAPIError: LLM API 调用失败
-    """
+    """运行 Agent 并返回响应（带重试策略）"""
     try:
         session_id = await session_manager.get_or_create_session(
             user_id=user_id, session_key=session_key
@@ -147,17 +132,9 @@ async def run_agent_with_session(
                 for part in event.content.parts:
                     if part.text:
                         response_text += part.text
-
         if not response_text:
             raise LLMAPIError("LLM 返回空响应")
-
         return response_text
-
-    except LLMAPIError:
-        raise
-    except TimeoutError as e:
-        logger.warning(f"LLM API 超时，将重试：{e}")
-        raise
     except Exception as e:
         logger.error(f"运行 Agent 失败: {e}")
         raise LLMAPIError(f"LLM API 调用失败: {str(e)}") from e
@@ -266,6 +243,17 @@ class ChannelHandler(ABC):
         Returns:
             Agent 响应
         """
+        # --- 动态工具注入逻辑 ---
+        try:
+            # 根据用户输入检索相关工具
+            dynamic_tools = get_tools(text)
+            # 更新 Agent 的工具列表
+            self.agent.tools = dynamic_tools
+            logger.debug(f"已为当前请求注入 {len(dynamic_tools)} 个工具")
+        except Exception as e:
+            logger.error(f"动态工具注入失败：{e}")
+        # -----------------------
+
         parts = [types.Part(text=text)]
 
         # 添加图片(如果有)
@@ -290,4 +278,3 @@ class ChannelHandler(ABC):
     async def cleanup(self):
         """清理资源(在应用关闭时调用)"""
         await self.session_manager.close()
-        logger.info(f"{self.channel_name} 渠道已清理")
