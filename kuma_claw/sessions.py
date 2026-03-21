@@ -87,7 +87,7 @@ class SQLiteSessionService:
             last_update_time=now_ts,
         )
 
-    async def get_session(self, app_name: str, user_id: str, session_id: str) -> Session | None:
+    async def get_session(self, app_name: str, user_id: str, session_id: str, **kwargs) -> Session | None:
         """获取会话"""
         with self._lock:
             row = (
@@ -172,7 +172,7 @@ class SQLiteSessionService:
                 app_name=r["app_name"],
                 user_id=r["user_id"],
                 state=json.loads(r["state"]),
-                last_update_time=r["updated_at"],
+                last_update_time=datetime.fromisoformat(r["updated_at"]).timestamp() if r["updated_at"] else 0.0,
             )
             for r in rows
         ]
