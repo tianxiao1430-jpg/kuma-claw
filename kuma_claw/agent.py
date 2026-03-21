@@ -1,11 +1,12 @@
 """
 Kuma Claw - Agent 定义
 ====================
-基于 Google ADK 的 AI Agent
+基于 Google ADK 的 AI Agent，支持按需加载技能工具
 """
 
 import logging
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -14,24 +15,35 @@ from google.adk.tools import FunctionTool
 
 logger = logging.getLogger("kuma_claw")
 
-# 懒加载缓存
+# ============================================
+# 懒加载缓存（带 TTL 失效机制)
+# ============================================
+
 _model_cache: str | None = None
+_model_cache_time: float = 0
 _google_workspace_toolsets_cache: list | None = None
+_google_workspace_cache_time: float = 0
 _agent_cache: LlmAgent | None = None
+_agent_cache_time: float = 0
+
+# 缓存 TTL（秒）
+CACHE_ttl = 300  # 5 minutes
 
 
 def reset_cache():
-    """重置所有缓存（测试用）"""
-    global _agent_cache, _google_workspace_toolsets_cache, _model_cache
-    _model_cache = None
+    """重置所有缓存"""
+    global _agent_cache, _google_workspace_toolsets_cache, _model_cache, _model_cache_time
     _agent_cache = None
-    _google_workspace_toolsets_cache = []
+    _agent_cache_time = 0
+    _google_workspace_toolsets_cache = None
+    _google_workspace_cache_time = 0
 
 
 def get_model():
-    """获取模型配置（懒加载）"""
-    global _model_cache
-    if _model_cache is not None:
+    """获取模型配置（懒加载 + TTL 缓存）"""
+    global _model_cache, _model_cache_time
+
+    if _model_cache is not None and _is_cache_valid(_model_cache_time):
         return _model_cache
 
     try:
@@ -48,13 +60,13 @@ def get_model():
     else:
         _model_cache = model
 
+    _model_cache_time = time.time()
     return _model_cache
 
 
 # ============================================
-# 基础工具
+# 匉能加载工具
 # ============================================
-
 
 def get_current_time() -> str:
     """获取当前时间"""
@@ -62,7 +74,7 @@ def get_current_time() -> str:
 
 
 def echo_message(message: str) -> str:
-    """回显消息（测试用）"""
+    """回显消息（测试用)"""
     return f"收到：{message}"
 
 
@@ -98,6 +110,7 @@ def forget(content_pattern: str) -> str:
         return "没有找到匹配的记忆"
     entry = results[0].entry
     memory_manager.forget(entry.id)
+
     return f"✅ 已忘记：{entry.content}"
 
 
@@ -145,9 +158,10 @@ def web_search(query: str, limit: int = 5) -> str:
 
 
 def _load_google_workspace_toolsets():
-    """加载 Google Workspace 工具集（懒加载）"""
-    global _google_workspace_toolsets_cache
-    if _google_workspace_toolsets_cache is not None:
+    """加载 Google Workspace 工具集（懒加载 + TTL 缓存）"""
+    global _google_workspace_toolsets_cache, _google_workspace_cache_time
+
+    if _google_workspace_toolsets_cache is not None and _is_cache_valid(_google_workspace_cache_time):
         return _google_workspace_toolsets_cache
 
     try:
@@ -166,21 +180,38 @@ def _load_google_workspace_toolsets():
 
 
 # ============================================
-# Skills 工具
+# Skills 工具 - 按需加载
 # ============================================
 
 
-def _load_and_register_skills(tools_list: list) -> int:
-    """加载 Skills 并注册工具"""
+def _load_and_register_skills(tools_list: list, message_text: str | None) -> int:
+    """加载 Skills 并注册工具（按需加载）
+
+    Args:
+        tools_list: 工具列表
+        message_text: 用户消息文本（用于触发词匹配）
+        session_id: 会话 ID（可选）
+
+    Returns:
+            注册的工具数量
+    """
     try:
-        # 统一从 kuma_claw.skills 加载
         from .skills.skill_manager import skill_manager
+
         logger.info("从 kuma_claw.skills 加载 skill_manager")
 
-        skill_manager.register_tools_to_agent(type("Agent", (), {"tools": tools_list})())
-        tools = skill_manager.get_all_tools()
-        logger.info(f"加载了 {len(tools)} 个 Skill 工具")
-        return len(tools)
+        # 检查是否有匹配的技能
+        matched_skill = skill_manager.get_skill_by_trigger(message_text)
+        if matched_skill:
+            # 按需加载：只注册匹配的工具
+            tools_list.extend(matched_skill.tools)
+            logger.info(f"按需加载技能: {matched_skill.name} ({len(matched_skill.tools)} 个工具)")
+            return len(tools)
+        else:
+            # 回退：加载所有技能
+            _load_and_register_skills(tools_list)
+            return len(tools_list)
+
     except Exception as e:
         logger.error(f"加载 Skills 失败：{e}")
         return 0
@@ -191,8 +222,8 @@ def _load_and_register_skills(tools_list: list) -> int:
 # ============================================
 
 
-def get_tools() -> list[FunctionTool]:
-    """获取工具列表"""
+def get_tools(message_text: str | None = "telegram") -> list[FunctionTool]:
+    """获取工具列表（支持按需加载）"""
     tools = [
         FunctionTool(func=web_search),
         FunctionTool(func=get_current_time),
@@ -203,13 +234,17 @@ def get_tools() -> list[FunctionTool]:
         FunctionTool(func=get_memory_stats),
     ]
 
-    # Google Workspace
+    # 加载 Google Workspace 工具集
     gw_tools = _load_google_workspace_toolsets()
     if gw_tools:
         tools.extend(gw_tools)
 
-    # Skills
-    _load_and_register_skills(tools)
+    # 按需加载技能（基于消息内容）
+    if message_text:
+                _load_and_register_skills_by_trigger(tools, message_text)
+
+            else:
+                _load_and_register_skills(tools)
 
     return tools
 
@@ -254,17 +289,20 @@ def create_agent(channel: str = "telegram") -> LlmAgent:
     )
 
 
-def get_agent(channel: str = "telegram") -> LlmAgent:
-    """获取 Agent 实例（单例）"""
-    global _agent_cache
-    if _agent_cache is None:
+def get_agent(channel: str = "telegram", force_refresh: bool = False) -> LlmAgent:
+    """获取 Agent 实例（单例 + TTL 缓存）
+
+    Args:
+        channel: 渠道名称
+        force_refresh: 是否强制刷新缓存
+    """
+    global _agent_cache, _agent_cache_time
+
+    if _agent_cache is None or not _is_cache_valid(_agent_cache_time) or force_refresh:
         _agent_cache = create_agent(channel)
+        _agent_cache_time = time.time()
+        logger.debug("Agent 缓存已过期，重新创建")
     return _agent_cache
-
-
-# ============================================
-# 模块导出
-# ============================================
 
 
 def __getattr__(name):

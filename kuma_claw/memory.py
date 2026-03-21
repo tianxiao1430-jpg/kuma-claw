@@ -1,7 +1,7 @@
 """
 Kuma Claw - 记忆系统
 ==================
-SQLite + JSON 双重持久化，线程安全
+SQLite 持久化，线程安全（已移除 JSON 冗余）
 """
 
 import hashlib
@@ -96,6 +96,18 @@ class MemoryStore:
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
+            
+            -- 会话消息表（替代 JSON 文件）
+            CREATE TABLE IF NOT EXISTS session_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                timestamp TEXT NOT NULL
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_session_messages_session 
+            ON session_messages(session_id);
         """)
         conn.commit()
 
@@ -214,6 +226,53 @@ class MemoryStore:
             embedding=embedding,
         )
 
+    # ============================================
+    # 会话消息（统一使用 SQLite）
+    # ============================================
+
+    def add_session_message(self, session_id: str, role: str, content: str):
+        """添加会话消息（仅 SQLite）"""
+        conn = self._get_conn()
+        conn.execute(
+            """
+            INSERT INTO session_messages (session_id, role, content, timestamp)
+            VALUES (?, ?, ?, ?)
+            """,
+            (session_id, role, content, datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+
+    def get_session_messages(self, session_id: str, limit: int = 50) -> list[dict]:
+        """获取会话消息"""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """
+            SELECT role, content, timestamp FROM session_messages
+            WHERE session_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (session_id, limit),
+        ).fetchall()
+        # 反转顺序（从旧到新）
+        messages = [
+            {"role": r["role"], "content": r["content"], "timestamp": r["timestamp"]}
+            for r in reversed(rows)
+        ]
+        return messages
+
+    def delete_session(self, session_id: str):
+        """删除会话"""
+        conn = self._get_conn()
+        conn.execute("DELETE FROM session_messages WHERE session_id = ?", (session_id,))
+        conn.commit()
+
+    def list_sessions(self) -> list[str]:
+        """列出所有会话"""
+        conn = self._get_conn()
+        rows = conn.execute("SELECT DISTINCT session_id FROM session_messages").fetchall()
+        return [r["session_id"] for r in rows]
+
     def close(self):
         """关闭连接"""
         if hasattr(self._local, "conn") and self._local.conn:
@@ -221,83 +280,11 @@ class MemoryStore:
             self._local.conn = None
 
 
-class SessionStore:
-    """会话存储（JSON 文件）"""
-
-    def __init__(self, data_dir: str | None = None):
-        self.data_dir = Path(data_dir or str(Path.home() / ".kuma-claw" / "sessions"))
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self._sessions: dict[str, list[dict]] = {}
-        self._lock = threading.Lock()
-        self._load_all_sessions()
-
-    def _session_file(self, session_id: str) -> Path:
-        safe_id = hashlib.sha256(session_id.encode()).hexdigest()[:16]
-        return self.data_dir / f"{safe_id}.json"
-
-    def _load_all_sessions(self):
-        for json_file in self.data_dir.glob("*.json"):
-            try:
-                with json_file.open("r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if data.get("session_id"):
-                        self._sessions[data["session_id"]] = data.get("messages", [])
-            except (json.JSONDecodeError, OSError):
-                pass
-
-    def load_session(self, session_id: str) -> list[dict]:
-        with self._lock:
-            return self._sessions.get(session_id, []).copy()
-
-    def save_session(self, session_id: str, messages: list[dict]):
-        with self._lock:
-            self._sessions[session_id] = messages.copy()
-            session_file = self._session_file(session_id)
-            temp_file = session_file.with_suffix(".tmp")
-
-            try:
-                data = {
-                    "session_id": session_id,
-                    "messages": messages,
-                    "last_updated": datetime.utcnow().isoformat(),
-                    "message_count": len(messages),
-                }
-                with temp_file.open("w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-                temp_file.replace(session_file)
-            except OSError:
-                if temp_file.exists():
-                    temp_file.unlink()
-                raise
-
-    def add_message(self, session_id: str, role: str, content: str):
-        with self._lock:
-            if session_id not in self._sessions:
-                self._sessions[session_id] = []
-
-            self._sessions[session_id].append(
-                {"role": role, "content": content, "timestamp": datetime.utcnow().isoformat()}
-            )
-            self.save_session(session_id, self._sessions[session_id])
-
-    def delete_session(self, session_id: str):
-        with self._lock:
-            self._sessions.pop(session_id, None)
-            session_file = self._session_file(session_id)
-            if session_file.exists():
-                session_file.unlink()
-
-    def list_sessions(self) -> list[str]:
-        with self._lock:
-            return list(self._sessions.keys())
-
-
 class MemoryManager:
     """记忆管理器"""
 
-    def __init__(self, store: MemoryStore | None = None, session_store: SessionStore | None = None):
+    def __init__(self, store: MemoryStore | None = None):
         self.store = store or MemoryStore()
-        self.session_store = session_store or SessionStore()
 
     def remember(
         self, content: str, source: str = "fact", metadata: dict | None = None
@@ -331,23 +318,18 @@ class MemoryManager:
         return "## 相关记忆\n" + "\n".join(f"- {r.entry.content}" for r in results)
 
     def add_session_message(self, session_id: str, role: str, content: str):
-        """添加会话消息"""
-        self.remember(
-            content=f"[{role}] {content}",
-            source=f"session:{session_id}",
-            metadata={"role": role, "session_id": session_id},
-        )
-        self.session_store.add_message(session_id, role, content)
+        """添加会话消息（仅 SQLite，不再双重写入）"""
+        # 只写入 SQLite
+        self.store.add_session_message(session_id, role, content)
 
     def get_session_history(self, session_id: str, limit: int = 50) -> list[dict]:
         """获取会话历史"""
-        messages = self.session_store.load_session(session_id)
-        return messages[-limit:] if messages else []
+        return self.store.get_session_messages(session_id, limit)
 
     def clear_session(self, session_id: str):
         """清空会话"""
         self.store.clear(f"session:{session_id}")
-        self.session_store.delete_session(session_id)
+        self.store.delete_session(session_id)
 
     def stats(self) -> MemoryStats:
         """统计"""
