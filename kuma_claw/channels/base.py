@@ -288,7 +288,7 @@ class ChannelHandler(ABC):
         history_parts = []
         try:
             from ..memory import memory_manager
-            history = memory_manager.get_session_messages(session_id, limit=20)
+            history = memory_manager.get_session_history(session_id, limit=20)
             if history:
                 for msg in history:
                     role = "user" if msg["role"] == "user" else "model"
@@ -304,7 +304,7 @@ class ChannelHandler(ABC):
         except Exception as e:
             logger.error(f"记录用户消息失败：{e}")
         # ------------------------------
-
+        
         # 构建完整的消息 parts（历史 + 当前）
         full_parts = history_parts + parts
 
