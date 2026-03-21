@@ -66,14 +66,15 @@ class SQLiteSessionService:
     ) -> Session:
         """创建会话"""
         session_id = session_id or str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now_iso = datetime.utcnow().isoformat()
+        now_ts = datetime.utcnow().timestamp()
         state = state or {}
 
         with self._lock:
             self._get_conn().execute(
                 "INSERT INTO sessions (id, user_id, app_name, state, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                (session_id, user_id, app_name, json.dumps(state), now, now),
+                (session_id, user_id, app_name, json.dumps(state), now_iso, now_iso),
             )
             self._get_conn().commit()
 
@@ -83,8 +84,7 @@ class SQLiteSessionService:
             app_name=app_name,
             user_id=user_id,
             state=state,
-            created_at=now,
-            updated_at=now,
+            last_update_time=now_ts,
         )
 
     async def get_session(self, app_name: str, user_id: str, session_id: str) -> Session | None:
@@ -102,26 +102,32 @@ class SQLiteSessionService:
         if not row:
             return None
 
+        updated_at_str = row["updated_at"]
+        try:
+            last_update_time = datetime.fromisoformat(updated_at_str).timestamp()
+        except Exception:
+            last_update_time = 0.0
+
         return Session(
             id=row["id"],
             app_name=row["app_name"],
             user_id=row["user_id"],
             state=json.loads(row["state"]),
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
+            last_update_time=last_update_time,
         )
 
     async def update_session(
         self, app_name: str, user_id: str, session_id: str, state: dict[str, Any]
     ) -> Session:
         """更新会话"""
-        now = datetime.utcnow().isoformat()
+        now_iso = datetime.utcnow().isoformat()
+        now_ts = datetime.utcnow().timestamp()
 
         with self._lock:
             self._get_conn().execute(
                 "UPDATE sessions SET state = ?, updated_at = ? "
                 "WHERE id = ? AND app_name = ? AND user_id = ?",
-                (json.dumps(state), now, session_id, app_name, user_id),
+                (json.dumps(state), now_iso, session_id, app_name, user_id),
             )
             self._get_conn().commit()
 
@@ -130,8 +136,7 @@ class SQLiteSessionService:
             app_name=app_name,
             user_id=user_id,
             state=state,
-            created_at=now,
-            updated_at=now,
+            last_update_time=now_ts,
         )
 
     async def delete_session(self, app_name: str, user_id: str, session_id: str) -> bool:
@@ -167,8 +172,7 @@ class SQLiteSessionService:
                 app_name=r["app_name"],
                 user_id=r["user_id"],
                 state=json.loads(r["state"]),
-                created_at=r["created_at"],
-                updated_at=r["updated_at"],
+                last_update_time=datetime.fromisoformat(r["updated_at"]).timestamp() if r["updated_at"] else 0.0,
             )
             for r in rows
         ]
