@@ -105,50 +105,43 @@ def main():
 
     # 异步服务启动逻辑
     async def run_services():
-        tasks = []
+        from .agent import create_agent
+        from .gateway import Gateway, ChannelType
+        from .gateway.adapters.telegram import TelegramAdapter
+        from .gateway.adapters.slack import SlackAdapter
 
-        # Slack
-        if args.slack or args.all:
-            if config.get_slack_bot_token():
-                from .agent import create_agent
-                from .channels.slack import create_slack_channel
+        gateway = Gateway()
+        agent = create_agent()
+        gateway.set_agent(agent)
 
-                agent = create_agent("slack")
-                slack_channel = create_slack_channel(
-                    agent=agent,
-                    bot_token=config.get_slack_bot_token(),
-                    app_token=config.get_slack_app_token(),
-                )
-                tasks.append(slack_channel.start())
-                print("💬 Slack Bot 已就绪")
-            else:
-                print("⚠️  Slack 未配置，跳过")
-
-        # Telegram
+        # Register adapters based on config
         if args.telegram or args.all:
             token = config.get_telegram_token()
             if token:
-                from .agent import create_agent
-                from .channels.telegram import create_telegram_channel
-
-                agent = create_agent("telegram")
-                telegram_channel = create_telegram_channel(agent=agent, token=token)
-                tasks.append(telegram_channel.start())
+                adapter = TelegramAdapter(gateway, token)
+                gateway.register_adapter(ChannelType.TELEGRAM, adapter)
                 print("📱 Telegram Bot 已就绪")
             else:
                 print("⚠️  Telegram 未配置，跳过")
 
-        if tasks:
-            # 运行所有服务的 start 方法
-            await asyncio.gather(*tasks)
-            print("火箭 所有 Bot 服务已启动")
+        if args.slack or args.all:
+            bot_token = config.get_slack_bot_token()
+            app_token = config.get_slack_app_token()
+            if bot_token:
+                adapter = SlackAdapter(gateway, bot_token, app_token)
+                gateway.register_adapter(ChannelType.SLACK, adapter)
+                print("💬 Slack Bot 已就绪")
+            else:
+                print("⚠️  Slack 未配置，跳过")
 
-            # 保持异步事件循环运行，以免后台任务被终止
-            try:
-                while True:
-                    await asyncio.sleep(3600)
-            except asyncio.CancelledError:
-                pass
+        await gateway.start()
+
+        # Keep running
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            await gateway.stop()
 
     if args.slack or args.telegram or args.all:
         try:
