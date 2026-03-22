@@ -11,7 +11,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
@@ -205,7 +205,7 @@ def _get_skill_manager():
     return _skill_manager_cache
 
 
-def get_core_tools() -> List[FunctionTool]:
+def get_core_tools() -> list:
     """获取核心基础工具"""
     return [
         FunctionTool(func=web_search),
@@ -218,7 +218,7 @@ def get_core_tools() -> List[FunctionTool]:
     ]
 
 
-def get_tools(message_text: str | None = None) -> List[FunctionTool]:
+def get_tools(message_text: str | None = None) -> list:
     """根据输入动态检索并返回相关的工具/技能 (Everything is Context)"""
     from .memory import memory_manager
 
