@@ -1,5 +1,7 @@
 """会话服务测试"""
 
+import time
+
 import pytest
 
 from kuma_claw.sessions import SQLiteSessionService
@@ -51,7 +53,11 @@ class TestSQLiteSessionService:
         from google.genai import types
 
         content = types.Content(role="user", parts=[types.Part(text="Hello")])
-        event = Event(content=content)
+        event = Event(
+            author="user",
+            content=content,
+            timestamp=time.time(),
+        )
 
         # 调用 append_event
         await session_service.append_event(session, event)
