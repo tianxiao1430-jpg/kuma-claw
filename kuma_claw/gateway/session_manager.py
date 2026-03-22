@@ -49,9 +49,7 @@ class UnifiedSessionManager:
             )
 
             if existing_sessions:
-                session = max(
-                    existing_sessions, key=lambda s: getattr(s, "last_update_time", 0)
-                )
+                session = max(existing_sessions, key=lambda s: getattr(s, "last_update_time", 0))
                 session_id = session.id if hasattr(session, "id") else str(session)
             else:
                 session = await self.session_service.create_session(

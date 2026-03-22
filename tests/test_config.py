@@ -18,8 +18,10 @@ def config():
 
         from kuma_claw import config as config_module
 
-        config_module.CONFIG_DIR = f"{tmpdir}/.kuma-claw"
-        config_module.CONFIG_FILE = f"{tmpdir}/.kuma-claw/config.json"
+        from pathlib import Path
+
+        config_module.CONFIG_DIR = Path(tmpdir) / ".kuma-claw"
+        config_module.CONFIG_FILE = Path(tmpdir) / ".kuma-claw" / "config.json"
 
         yield Config()
 

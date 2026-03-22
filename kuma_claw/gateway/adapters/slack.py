@@ -56,9 +56,7 @@ class SlackAdapter(BaseAdapter):
             text = event.get("text", "")
             text = re.sub(r"<@[^>]+>", "", text).strip()
 
-            logger.debug(
-                f"Slack 消息: user={user_id}, channel={channel}, thread={thread_ts}"
-            )
+            logger.debug(f"Slack 消息: user={user_id}, channel={channel}, thread={thread_ts}")
 
             # 提取图片（如果有）
             files = event.get("files", [])
@@ -168,9 +166,7 @@ class SlackAdapter(BaseAdapter):
             # 从响应头获取 MIME 类型
             content_type = response.headers.get("content-type", "image/jpeg")
 
-            logger.debug(
-                f"下载 Slack 图片成功: {url_private}, size={len(response.content)} bytes"
-            )
+            logger.debug(f"下载 Slack 图片成功: {url_private}, size={len(response.content)} bytes")
             return response.content, content_type
 
         except httpx.HTTPError as e:
