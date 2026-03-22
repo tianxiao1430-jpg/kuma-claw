@@ -75,20 +75,19 @@ class TestSystemInstruction:
         """测试获取系统提示词"""
         from kuma_claw.agent import get_system_instruction
 
-        instruction = get_system_instruction("telegram")
+        instruction = get_system_instruction()
 
         assert isinstance(instruction, str)
         assert len(instruction) > 0
         # 应该包含内部思考说明
         assert "internal" in instruction.lower() or "思考" in instruction
 
-    def test_get_system_instruction_channel(self):
-        """测试不同渠道的系统提示词"""
+    def test_get_system_instruction_no_channel(self):
+        """测试系统提示词不再接受 channel 参数"""
         from kuma_claw.agent import get_system_instruction
 
-        telegram_instruction = get_system_instruction("telegram")
-        slack_instruction = get_system_instruction("slack")
+        # 重构后 get_system_instruction 不再接受参数
+        instruction = get_system_instruction()
 
-        # 不同渠道可能有不同的格式要求
-        assert isinstance(telegram_instruction, str)
-        assert isinstance(slack_instruction, str)
+        assert isinstance(instruction, str)
+        assert len(instruction) > 0
