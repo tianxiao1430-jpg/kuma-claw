@@ -18,8 +18,8 @@ from typing import Any
 from google.adk.sessions import BaseSessionService, Session
 
 try:
-    from google.adk.sessions import GetSessionConfig, ListSessionsResponse
     from google.adk.events.event import Event
+    from google.adk.sessions import GetSessionConfig, ListSessionsResponse
 except ImportError:
     # 兼容低版本的 google-adk
     class GetSessionConfig:
@@ -88,7 +88,7 @@ class SQLiteSessionService(BaseSessionService):
             elif hasattr(event, 'dict'):
                 return event.dict()
             else:
-                logger.warning(f"Event 对象不支持 model_dump/dict")
+                logger.warning("Event 对象不支持 model_dump/dict")
                 return {}
         except Exception as e:
             logger.error(f"序列化 Event 失败：{e}")
