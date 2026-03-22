@@ -146,7 +146,7 @@ class MemoryStore:
         return self._row_to_entry(row) if row else None
 
     def search_fts(self, query: str, limit: int = 10) -> list[MemorySearchResult]:
-        """FTS 搜索"""
+        """FTS 搜索（中文回退到 LIKE）"""
         conn = self._get_conn()
         try:
             rows = conn.execute(
@@ -160,6 +160,18 @@ class MemoryStore:
             """,
                 (query, limit),
             ).fetchall()
+            # FTS5 对中文支持不好，如果返回空结果，回退到 LIKE
+            if not rows:
+                rows = conn.execute(
+                    """
+                    SELECT *, 1.0 as score
+                    FROM memories
+                    WHERE content LIKE ?
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                """,
+                    (f"%{query}%", limit),
+                ).fetchall()
         except sqlite3.Error:
             # FTS 失败，回退到 LIKE
             rows = conn.execute(
