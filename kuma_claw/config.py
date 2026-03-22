@@ -7,9 +7,12 @@ Kuma Claw - 配置管理
 import base64
 import hashlib
 import json
+import logging
 import os
 import uuid
 from pathlib import Path
+
+logger = logging.getLogger("kuma_claw.config")
 
 # 配置目录
 CONFIG_DIR = Path.home() / ".kuma-claw"
@@ -77,7 +80,8 @@ def _load_secrets_file() -> dict:
             encrypted_data = json.load(f)
         # 解密所有值
         return {k: _decrypt_value(v) for k, v in encrypted_data.items()}
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to load secrets file: {e}")
         return {}
 
 
@@ -126,8 +130,8 @@ class Config:
                 value = keyring.get_password(KEYRING_SERVICE, key)
                 if value:
                     return value
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to get secret '{key}' from keyring: {e}")
 
         # 2. 尝试加密文件
         if self._secrets_cache is None:
@@ -153,8 +157,8 @@ class Config:
                 keyring.set_password(KEYRING_SERVICE, key, value)
                 storage_type = "keyring"
                 stored = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to set secret '{key}' in keyring: {e}")
 
         # 2. 回退加密文件
         if not stored:
