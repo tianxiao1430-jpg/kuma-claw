@@ -1,6 +1,8 @@
 """
 Kuma Claw - 主入口
 ================
+
+通过 Gateway 统一入口启动
 """
 
 import asyncio
@@ -79,7 +81,7 @@ def main():
     print_banner()
     print_status()
 
-    # 如果没有指定任何参数， 启动 Web UI
+    # 如果没有指定任何参数，启动 Web UI
     if not args.web and not args.slack and not args.telegram and not args.all:
         print("💡 使用 --help 查看帮助")
         print("🌐 启动 Web UI 进行配置...")
@@ -103,11 +105,27 @@ def main():
         web_thread.start()
         print(f"🌐 Web UI: http://localhost:{args.port}")
 
-    # 异步服务启动逻辑
-    async def run_services():
-        tasks = []
+    # 通过 Gateway 启动渠道
+    async def run_via_gateway():
+        from .gateway import ChannelType, Gateway
+        
+        gateway = Gateway()
+        
+        # 注册 Telegram 渠道
+        if args.telegram or args.all:
+            token = config.get_telegram_token()
+            if token:
+                from .agent import create_agent
+                from .channels.telegram import create_telegram_channel
 
-        # Slack
+                agent = create_agent("telegram")
+                telegram_channel = create_telegram_channel(agent=agent, token=token)
+                gateway.register_channel(ChannelType.TELEGRAM, telegram_channel)
+                print("📱 Telegram Bot 已注册")
+            else:
+                print("⚠️  Telegram 未配置，跳过")
+
+        # 注册 Slack 渠道
         if args.slack or args.all:
             if config.get_slack_bot_token():
                 from .agent import create_agent
@@ -119,40 +137,29 @@ def main():
                     bot_token=config.get_slack_bot_token(),
                     app_token=config.get_slack_app_token(),
                 )
-                tasks.append(slack_channel.start())
-                print("💬 Slack Bot 已就绪")
+                gateway.register_channel(ChannelType.SLACK, slack_channel)
+                print("💬 Slack Bot 已注册")
             else:
                 print("⚠️  Slack 未配置，跳过")
 
-        # Telegram
-        if args.telegram or args.all:
-            token = config.get_telegram_token()
-            if token:
-                from .agent import create_agent
-                from .channels.telegram import create_telegram_channel
-
-                agent = create_agent("telegram")
-                telegram_channel = create_telegram_channel(agent=agent, token=token)
-                tasks.append(telegram_channel.start())
-                print("📱 Telegram Bot 已就绪")
-            else:
-                print("⚠️  Telegram 未配置，跳过")
-
-        if tasks:
-            # 运行所有服务的 start 方法
-            await asyncio.gather(*tasks)
-            print("火箭 所有 Bot 服务已启动")
-
-            # 保持异步事件循环运行，以免后台任务被终止
+        # 启动 Gateway
+        if gateway.channels:
+            print("\n🚀 启动 Gateway...")
+            await gateway.start()
+            print("✅ 所有服务已通过 Gateway 启动")
+            
+            # 保持运行
             try:
-                while True:
-                    await asyncio.sleep(3600)
+                while gateway.is_running:
+                    await asyncio.sleep(1)
             except asyncio.CancelledError:
                 pass
+            finally:
+                await gateway.stop()
 
     if args.slack or args.telegram or args.all:
         try:
-            asyncio.run(run_services())
+            asyncio.run(run_via_gateway())
         except KeyboardInterrupt:
             print("\n👋 再见!")
 

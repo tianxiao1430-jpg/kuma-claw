@@ -227,15 +227,6 @@ class ChannelHandler(ABC):
             user_id=user_id, session_key=session_key
         )
 
-        # 记录用户消息到 session_messages
-        try:
-            from ..memory import memory_manager
-
-            memory_manager.add_session_message(session_id, "user", text)
-        except Exception as e:
-            logger.error(f"记录用户消息失败：{e}")
-
-        # 运行 Agent（ADK 会自动调用 append_event 持久化对话历史）
         response = await run_agent_with_session_fallback(
             runner=self.runner,
             session_manager=self.session_manager,
@@ -243,14 +234,6 @@ class ChannelHandler(ABC):
             parts=parts,
             session_key=session_key,
         )
-
-        # 记录响应到 session_messages
-        try:
-            from ..memory import memory_manager
-
-            memory_manager.add_session_message(session_id, "assistant", response)
-        except Exception as e:
-            logger.error(f"记录助手响应失败：{e}")
 
         return response
 
