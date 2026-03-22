@@ -106,9 +106,9 @@ def main():
     # 异步服务启动逻辑
     async def run_services():
         from .agent import create_agent
-        from .gateway import Gateway, ChannelType
-        from .gateway.adapters.telegram import TelegramAdapter
+        from .gateway import ChannelType, Gateway
         from .gateway.adapters.slack import SlackAdapter
+        from .gateway.adapters.telegram import TelegramAdapter
 
         gateway = Gateway()
         agent = create_agent()

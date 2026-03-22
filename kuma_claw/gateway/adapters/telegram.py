@@ -53,9 +53,7 @@ class TelegramAdapter(BaseAdapter):
         self.app.add_handler(CommandHandler("clear", self._cmd_clear))
 
         # 注册消息处理器
-        self.app.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_text)
-        )
+        self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_text))
         self.app.add_handler(MessageHandler(filters.PHOTO, self._handle_photo))
 
         logger.info("Telegram Bot 启动中...")

@@ -51,27 +51,16 @@ class TestMemoryStore:
         assert "preference" in stats.by_source
 
 
-class TestSessionStore:
-    """SessionStore 测试"""
+class TestMemoryManager:
+    """MemoryManager 额外测试"""
 
-    def test_session_messages(self, memory_manager):
-        """测试会话消息"""
-        session_id = "test_session_001"
+    def test_get_context_empty(self, memory_manager):
+        """测试空上下文"""
+        context = memory_manager.get_context("不存在的内容")
+        assert context == ""
 
-        memory_manager.add_session_message(session_id, "user", "你好")
-        memory_manager.add_session_message(session_id, "assistant", "你好！")
-
-        history = memory_manager.get_session_history(session_id)
-        assert len(history) == 2
-        assert history[0]["role"] == "user"
-        assert history[1]["role"] == "assistant"
-
-    def test_clear_session(self, memory_manager):
-        """测试清空会话"""
-        session_id = "test_session_002"
-
-        memory_manager.add_session_message(session_id, "user", "测试")
-        memory_manager.clear_session(session_id)
-
-        history = memory_manager.get_session_history(session_id)
-        assert len(history) == 0
+    def test_get_context_with_results(self, memory_manager):
+        """测试有结果的上下文"""
+        memory_manager.remember("项目使用 Python 开发", source="fact")
+        context = memory_manager.get_context("Python")
+        assert "Python" in context

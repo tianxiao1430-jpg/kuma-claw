@@ -4,12 +4,12 @@ Kuma Claw - 记忆系统
 SQLite 持久化，线程安全（已移除 JSON 冗余）
 """
 
-import hashlib
 import json
 import sqlite3
 import threading
+import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -243,9 +243,9 @@ class MemoryManager:
         self, content: str, source: str = "fact", metadata: dict | None = None
     ) -> MemoryEntry:
         """记住"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         entry = MemoryEntry(
-            id=hashlib.sha256(content.encode()).hexdigest()[:16],
+            id=str(uuid.uuid4()),
             content=content,
             source=source,
             metadata=metadata or {},

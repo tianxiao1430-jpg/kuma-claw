@@ -11,7 +11,7 @@ import logging
 import sqlite3
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -107,8 +107,8 @@ class SQLiteSessionService(BaseSessionService):
     ) -> Session:
         """创建会话"""
         session_id = session_id or str(uuid.uuid4())
-        now_iso = datetime.utcnow().isoformat()
-        now_ts = datetime.utcnow().timestamp()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        now_ts = datetime.now(timezone.utc).timestamp()
         state = state or {}
 
         with self._lock:
@@ -229,7 +229,7 @@ class SQLiteSessionService(BaseSessionService):
             return event
 
         # 持久化到数据库
-        now_iso = datetime.utcnow().isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
 
         # 序列化所有 events
         events_json = json.dumps([self._serialize_event(e) for e in session.events])
