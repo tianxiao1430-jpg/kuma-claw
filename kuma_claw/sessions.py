@@ -15,22 +15,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from google.adk.sessions import BaseSessionService, Session
-
-try:
-    from google.adk.events.event import Event
-    from google.adk.sessions import GetSessionConfig, ListSessionsResponse
-except ImportError:
-    # 兼容低版本的 google-adk
-    class GetSessionConfig:
-        pass
-
-    class ListSessionsResponse:
-        def __init__(self, sessions):
-            self.sessions = sessions
-
-    class Event:
-        pass
+from google.adk.events.event import Event
+from google.adk.sessions import BaseSessionService, GetSessionConfig, ListSessionsResponse, Session
 
 logger = logging.getLogger("kuma_claw")
 
@@ -83,13 +69,7 @@ class SQLiteSessionService(BaseSessionService):
     def _serialize_event(self, event: Event) -> dict:
         """将 Event 对象序列化为 dict（参考 ADK StorageEvent.from_event）"""
         try:
-            if hasattr(event, 'model_dump'):
-                return event.model_dump(exclude_none=True, mode="json")
-            elif hasattr(event, 'dict'):
-                return event.dict()
-            else:
-                logger.warning("Event 对象不支持 model_dump/dict")
-                return {}
+            return event.model_dump(exclude_none=True, mode="json")
         except Exception as e:
             logger.error(f"序列化 Event 失败：{e}")
             return {}
