@@ -5,12 +5,22 @@ Kuma Claw Gateway - 网关核心
 统一消息入口，支持多渠道、多 Agent 路由。
 """
 
+import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+from google.adk.agents import LlmAgent
+
+from .agent_runner import AgentRunner
+from .formats import extract_internal_content
+from .session_manager import SessionKey, UnifiedSessionManager
+
+logger = logging.getLogger("kuma_claw.gateway")
 
 # ============================================
 # 数据模型
@@ -160,54 +170,6 @@ class AgentRouter:
 
 
 # ============================================
-# 会话管理器
-# ============================================
-
-
-class SessionManager:
-    """会话管理器"""
-
-    def __init__(self):
-        self.sessions: dict[str, Session] = {}
-
-    def _session_key(self, channel: ChannelType, chat_id: str) -> str:
-        return f"{channel.value}:{chat_id}"
-
-    def get_or_create(
-        self,
-        channel: ChannelType,
-        chat_id: str,
-        user_id: str,
-    ) -> Session:
-        """获取或创建会话"""
-        key = self._session_key(channel, chat_id)
-
-        if key not in self.sessions:
-            self.sessions[key] = Session(
-                id=key,
-                user_id=user_id,
-                channel=channel,
-                chat_id=chat_id,
-            )
-
-        session = self.sessions[key]
-        session.touch()
-        return session
-
-    def get(self, channel: ChannelType, chat_id: str) -> Session | None:
-        """获取会话"""
-        key = self._session_key(channel, chat_id)
-        return self.sessions.get(key)
-
-    def set_agent(self, channel: ChannelType, chat_id: str, agent_id: str):
-        """设置会话绑定的 Agent"""
-        session = self.get(channel, chat_id)
-        if session:
-            session.agent_id = agent_id
-            session.touch()
-
-
-# ============================================
 # Gateway 核心
 # ============================================
 
@@ -215,11 +177,11 @@ class SessionManager:
 class Gateway:
     """网关核心"""
 
-    def __init__(self, config_path: str | None = None):
+    def __init__(self, config_path: str | None = None, db_path: str | None = None):
         self.config = self._load_config(config_path)
         self.router = AgentRouter()
-        self.session_manager = SessionManager()
-        self.agents: dict[str, Any] = {}  # agent_id -> Agent 实例
+        self.session_manager = UnifiedSessionManager(db_path=db_path)
+        self.agent_runner: AgentRunner | None = None
         self.adapters: dict[ChannelType, Any] = {}  # channel -> Adapter 实例
 
         # 加载路由规则
@@ -245,9 +207,10 @@ class Gateway:
             "routing": [{"default": True, "agent": "default"}],
         }
 
-    def register_agent(self, agent_id: str, agent: Any):
-        """注册 Agent"""
-        self.agents[agent_id] = agent
+    def set_agent(self, agent: LlmAgent):
+        """Set the LLM agent and create the AgentRunner."""
+        self.agent_runner = AgentRunner(agent=agent, session_manager=self.session_manager)
+        logger.info("AgentRunner initialized")
 
     def register_adapter(self, channel: ChannelType, adapter: Any):
         """注册渠道适配器"""
@@ -255,47 +218,69 @@ class Gateway:
 
     async def process_message(self, message: Message) -> Reply:
         """处理消息"""
-        # 1. 获取/创建会话
-        session = self.session_manager.get_or_create(
-            message.channel,
-            message.chat_id,
-            message.user_id,
+        if not self.agent_runner:
+            raise RuntimeError("AgentRunner not initialized. Call set_agent() first.")
+
+        # 1. Build SessionKey from message
+        scope = message.metadata.get("scope", message.chat_id)
+        session_key = SessionKey(
+            channel=message.channel.value,
+            user_id=message.user_id,
+            scope=scope,
         )
 
-        # 2. 路由到对应的 Agent
+        # 2. Run via AgentRunner
+        images = message.metadata.get("images")
+        raw_response = await self.agent_runner.run(
+            session_key=session_key,
+            text=message.content,
+            images=images,
+        )
+
+        # 3. Apply extract_internal_content
+        internal, visible = extract_internal_content(raw_response)
+
+        # 4. Route to get agent name (for metadata)
         agent_id = self.router.route(message)
 
-        # 3. 如果会话已绑定特定 Agent，优先使用
-        if session.agent_id != "default":
-            agent_id = session.agent_id
+        # 5. Return Reply
+        metadata: dict[str, Any] = {}
+        if internal:
+            metadata["internal"] = internal
 
-        # 4. 获取 Agent 实例
-        agent = self.agents.get(agent_id)
-        if not agent:
-            raise ValueError(f"Agent not found: {agent_id}")
-
-        # 5. 调用 Agent 处理
-        response = await agent.process(message, session)
-
-        # 6. 返回回复
         return Reply(
             id=f"reply-{message.id}",
             message_id=message.id,
-            content=response,
+            content=visible,
             agent=agent_id,
+            metadata=metadata,
         )
 
     async def start(self):
-        """启动网关"""
-        # TODO: 启动 WebSocket 服务器
-        # TODO: 启动所有已配置的适配器
-        pass
+        """启动网关 - start all registered adapters concurrently."""
+        if not self.adapters:
+            logger.warning("No adapters registered, nothing to start")
+            return
+
+        tasks = []
+        for channel, adapter in self.adapters.items():
+            logger.info(f"Starting adapter: {channel.value}")
+            tasks.append(asyncio.create_task(adapter.start()))
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info("Gateway started with %d adapters", len(self.adapters))
 
     async def stop(self):
-        """停止网关"""
-        # TODO: 停止所有适配器
-        # TODO: 停止 WebSocket 服务器
-        pass
+        """停止网关 - stop all adapters and close session manager."""
+        for channel, adapter in self.adapters.items():
+            logger.info(f"Stopping adapter: {channel.value}")
+            try:
+                await adapter.stop()
+            except Exception as e:
+                logger.error(f"Error stopping adapter {channel.value}: {e}")
+
+        await self.session_manager.close()
+        logger.info("Gateway stopped")
 
 
 # ============================================
@@ -303,6 +288,6 @@ class Gateway:
 # ============================================
 
 
-def create_gateway(config_path: str | None = None) -> Gateway:
+def create_gateway(config_path: str | None = None, db_path: str | None = None) -> Gateway:
     """创建网关实例"""
-    return Gateway(config_path)
+    return Gateway(config_path, db_path=db_path)

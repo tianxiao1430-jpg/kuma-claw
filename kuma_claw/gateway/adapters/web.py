@@ -90,7 +90,7 @@ class WebAdapter(BaseAdapter):
             while True:
                 data = await websocket.receive_json()
 
-                # 转换为统一消息格式
+                # 构造统一消息格式
                 message = Message(
                     id=str(uuid.uuid4()),
                     channel=ChannelType.WEB,
@@ -100,8 +100,8 @@ class WebAdapter(BaseAdapter):
                     metadata=data.get("metadata", {}),
                 )
 
-                # 处理消息
-                reply = await self._handle_message(message)
+                # 通过 Gateway 处理消息
+                reply = await self.gateway.process_message(message)
 
                 # 发送回复
                 if reply:

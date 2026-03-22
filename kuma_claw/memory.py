@@ -96,18 +96,6 @@ class MemoryStore:
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
-
-            -- 会话消息表（替代 JSON 文件）
-            CREATE TABLE IF NOT EXISTS session_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                timestamp TEXT NOT NULL
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_session_messages_session
-            ON session_messages(session_id);
         """)
         conn.commit()
 
@@ -238,53 +226,6 @@ class MemoryStore:
             embedding=embedding,
         )
 
-    # ============================================
-    # 会话消息（统一使用 SQLite，移除 JSON 冗余）
-    # ============================================
-
-    def add_session_message(self, session_id: str, role: str, content: str):
-        """添加会话消息（仅 SQLite，不再双重写入 JSON）"""
-        conn = self._get_conn()
-        conn.execute(
-            """
-            INSERT INTO session_messages (session_id, role, content, timestamp)
-            VALUES (?, ?, ?, ?)
-            """,
-            (session_id, role, content, datetime.utcnow().isoformat()),
-        )
-        conn.commit()
-
-    def get_session_messages(self, session_id: str, limit: int = 50) -> list[dict]:
-        """获取会话消息"""
-        conn = self._get_conn()
-        rows = conn.execute(
-            """
-            SELECT role, content, timestamp FROM session_messages
-            WHERE session_id = ?
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (session_id, limit),
-        ).fetchall()
-        # 反转顺序（从旧到新）
-        messages = [
-            {"role": r["role"], "content": r["content"], "timestamp": r["timestamp"]}
-            for r in reversed(rows)
-        ]
-        return messages
-
-    def delete_session(self, session_id: str):
-        """删除会话"""
-        conn = self._get_conn()
-        conn.execute("DELETE FROM session_messages WHERE session_id = ?", (session_id,))
-        conn.commit()
-
-    def list_sessions(self) -> list[str]:
-        """列出所有会话"""
-        conn = self._get_conn()
-        rows = conn.execute("SELECT DISTINCT session_id FROM session_messages").fetchall()
-        return [r["session_id"] for r in rows]
-
     def close(self):
         """关闭连接"""
         if hasattr(self._local, "conn") and self._local.conn:
@@ -328,19 +269,6 @@ class MemoryManager:
         if not results:
             return ""
         return "## 相关记忆\n" + "\n".join(f"- {r.entry.content}" for r in results)
-
-    def add_session_message(self, session_id: str, role: str, content: str):
-        """添加会话消息（仅 SQLite，不再双重写入 JSON）"""
-        self.store.add_session_message(session_id, role, content)
-
-    def get_session_history(self, session_id: str, limit: int = 50) -> list[dict]:
-        """获取会话历史"""
-        return self.store.get_session_messages(session_id, limit)
-
-    def clear_session(self, session_id: str):
-        """清空会话"""
-        self.store.clear(f"session:{session_id}")
-        self.store.delete_session(session_id)
 
     def stats(self) -> MemoryStats:
         """统计"""

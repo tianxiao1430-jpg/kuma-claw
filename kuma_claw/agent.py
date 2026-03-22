@@ -7,10 +7,8 @@ Kuma Claw - Agent 定义
 
 import logging
 import os
-import sys
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Optional
 
 from google.adk.agents import LlmAgent
@@ -286,9 +284,8 @@ def get_tools(message_text: str | None = None) -> list:
 # ============================================
 
 
-def get_system_instruction(channel: str = "telegram") -> str:
+def get_system_instruction() -> str:
     """构建系统提示词"""
-    from .channels.formats import inject_format_prompt
     from .prompts import build_system_prompt
 
     base_prompt = build_system_prompt()
@@ -307,10 +304,10 @@ def get_system_instruction(channel: str = "telegram") -> str:
 """
     time_prompt = f"\n\n## 系统信息\n当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
 
-    return inject_format_prompt(base_prompt + time_prompt + internal_prompt, channel)
+    return base_prompt + time_prompt + internal_prompt
 
 
-def create_agent(query: str = "", channel: str = "telegram") -> LlmAgent:
+def create_agent(query: str = "") -> LlmAgent:
     """创建 Agent 实例（支持动态工具注入）"""
     # 根据 query 动态选择工具
     tools = get_tools(query)
@@ -318,23 +315,22 @@ def create_agent(query: str = "", channel: str = "telegram") -> LlmAgent:
     return LlmAgent(
         name="kuma_claw",
         model=get_model(),
-        instruction=get_system_instruction(channel),
+        instruction=get_system_instruction(),
         description="Kuma Claw - 智能办公助手",
         tools=tools,
     )
 
 
-def get_agent(channel: str = "telegram", force_refresh: bool = False) -> LlmAgent:
+def get_agent(force_refresh: bool = False) -> LlmAgent:
     """获取 Agent 实例（单例 + TTL 缓存）
 
     Args:
-        channel: 渠道名称
         force_refresh: 是否强制刷新缓存
     """
     global _agent_cache, _agent_cache_time
 
     if _agent_cache is None or not _is_cache_valid(_agent_cache_time) or force_refresh:
-        _agent_cache = create_agent(channel=channel)
+        _agent_cache = create_agent()
         _agent_cache_time = time.time()
         logger.debug("Agent 缓存已过期或不存在，重新创建")
     return _agent_cache
@@ -348,7 +344,7 @@ def get_agent(channel: str = "telegram", force_refresh: bool = False) -> LlmAgen
 def __getattr__(name):
     """懒加载模块属性"""
     if name in ("kuma_claw_agent", "root_agent"):
-        return get_agent("telegram")
+        return get_agent()
     if name == "TOOLS":
         return get_core_tools()
     if name == "MODEL":
