@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from google.adk.events.event import Event
-from google.adk.sessions import BaseSessionService, GetSessionConfig, ListSessionsResponse, Session
+from google.adk.sessions import BaseSessionService, Session
+from google.adk.sessions.base_session_service import GetSessionConfig, ListSessionsResponse
 
 logger = logging.getLogger("kuma_claw")
 
