@@ -162,9 +162,9 @@ class SQLiteSessionService(BaseSessionService):
 
         # 应用 config 过滤
         if config:
-            if hasattr(config, 'num_recent_events') and config.num_recent_events:
-                events = events[-config.num_recent_events:]
-            if hasattr(config, 'after_timestamp') and config.after_timestamp:
+            if hasattr(config, "num_recent_events") and config.num_recent_events:
+                events = events[-config.num_recent_events :]
+            if hasattr(config, "after_timestamp") and config.after_timestamp:
                 events = [e for e in events if e.timestamp >= config.after_timestamp]
 
         return Session(
@@ -241,7 +241,14 @@ class SQLiteSessionService(BaseSessionService):
                 SET state = ?, events = ?, updated_at = ?
                 WHERE id = ? AND app_name = ? AND user_id = ?
                 """,
-                (json.dumps(session.state), events_json, now_iso, session.id, session.app_name, session.user_id),
+                (
+                    json.dumps(session.state),
+                    events_json,
+                    now_iso,
+                    session.id,
+                    session.app_name,
+                    session.user_id,
+                ),
             )
             self._get_conn().commit()
 

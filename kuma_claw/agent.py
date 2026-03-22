@@ -64,12 +64,14 @@ def get_model():
 
     try:
         from .config import config
+
         model = config.get_model()
     except (ImportError, AttributeError):
         model = os.environ.get("KUMA_MODEL", "gemini-3.1-flash")
 
     if isinstance(model, str) and model.startswith(("openai/", "anthropic/", "deepseek/")):
         from google.adk.models.lite_llm import LiteLlm
+
         _model_cache = LiteLlm(model=model)
     else:
         _model_cache = model
@@ -96,6 +98,7 @@ def echo_message(message: str) -> str:
 def remember(content: str, source: str = "fact") -> str:
     """记住重要信息、事实或用户偏好"""
     from .memory import memory_manager
+
     memory_manager.remember(content, source=source)
     return f"✅ 已记住：{content}"
 
@@ -103,6 +106,7 @@ def remember(content: str, source: str = "fact") -> str:
 def recall(query: str, limit: int = 5) -> str:
     """回忆之前记住的相关信息或会话历史"""
     from .memory import memory_manager
+
     results = memory_manager.search(query, limit=limit)
     if not results:
         return "没有找到相关记忆"
@@ -115,6 +119,7 @@ def recall(query: str, limit: int = 5) -> str:
 def forget(content_pattern: str) -> str:
     """忘记特定记忆"""
     from .memory import memory_manager
+
     results = memory_manager.search(content_pattern, limit=1)
     if not results:
         return "没有找到匹配的记忆"
@@ -126,6 +131,7 @@ def forget(content_pattern: str) -> str:
 def get_memory_stats() -> str:
     """获取记忆统计"""
     from .memory import memory_manager
+
     stats = memory_manager.stats()
     lines = [f"📊 记忆统计：\n- 总条目：{stats.total_entries}"]
     lines.extend(f"- {k}: {v}" for k, v in stats.by_source.items())
@@ -143,6 +149,7 @@ def web_search(query: str, limit: int = 5) -> str:
     """通过 DuckDuckGo 搜索网络获取实时信息"""
     try:
         from duckduckgo_search import DDGS
+
         with DDGS() as ddgs:
             results_raw = ddgs.text(query, max_results=limit)
         results = [
@@ -171,6 +178,7 @@ def _load_google_workspace_toolsets():
 
     try:
         from .tools.adk_google_workspace import create_all_google_workspace_toolsets
+
         _google_workspace_toolsets_cache = create_all_google_workspace_toolsets()
         logger.info(f"已加载 {len(_google_workspace_toolsets_cache)} 个 Google Workspace 工具集")
     except ImportError:
@@ -197,6 +205,7 @@ def _get_skill_manager():
 
     try:
         from .skills.skill_manager import skill_manager
+
         _skill_manager_cache = skill_manager
         logger.debug(f"SkillManager 加载完成，技能数量: {len(_skill_manager_cache.skills)}")
     except Exception as e:
@@ -296,9 +305,7 @@ def get_system_instruction(channel: str = "telegram") -> str:
 给用户的实际回复...
 ```
 """
-    time_prompt = (
-        f"\n\n## 系统信息\n当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-    )
+    time_prompt = f"\n\n## 系统信息\n当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
 
     return inject_format_prompt(base_prompt + time_prompt + internal_prompt, channel)
 

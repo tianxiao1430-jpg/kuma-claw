@@ -41,15 +41,12 @@ class SessionManager:
                     app_name=self.app_name, user_id=user_id
                 )
                 existing_sessions = (
-                    sessions_response.sessions
-                    if hasattr(sessions_response, 'sessions')
-                    else []
+                    sessions_response.sessions if hasattr(sessions_response, "sessions") else []
                 )
 
                 if existing_sessions:
                     session = max(
-                        existing_sessions,
-                        key=lambda s: getattr(s, 'last_update_time', 0)
+                        existing_sessions, key=lambda s: getattr(s, "last_update_time", 0)
                     )
                     session_id = session.id if hasattr(session, "id") else str(session)
                     self.user_sessions[key] = session_id
@@ -121,11 +118,7 @@ async def run_agent_with_session(
 
         content = types.Content(role="user", parts=parts)
 
-        events = runner.run_async(
-            session_id=session_id,
-            user_id=user_id,
-            new_message=content
-        )
+        events = runner.run_async(session_id=session_id, user_id=user_id, new_message=content)
 
         response_text = ""
         async for event in events:
