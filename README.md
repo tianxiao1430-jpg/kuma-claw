@@ -1,5 +1,7 @@
 # Kuma Claw
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
 > 🦞 基于 Google ADK 的智能办公助手
 
 ## 📚 文档
