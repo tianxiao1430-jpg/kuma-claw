@@ -72,7 +72,7 @@ class SlackAdapter(BaseAdapter):
                             img_bytes, mime_type = await self._download_image(url_private)
                             images.append((img_bytes, mime_type))
                             logger.debug(f"成功下载图片: {mime_type}")
-                        except Exception as e:
+                        except (RuntimeError, ValueError, OSError) as e:
                             logger.error(f"下载图片失败: {e}")
                             await client.chat_postMessage(
                                 channel=channel,
@@ -108,7 +108,7 @@ class SlackAdapter(BaseAdapter):
                     thread_ts=thread_ts,
                 )
 
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 logger.error(f"处理消息失败: {e}")
                 await client.chat_postMessage(
                     channel=channel,
@@ -122,7 +122,7 @@ class SlackAdapter(BaseAdapter):
             await self.handler.start_async()
             set_status("slack", "connected")
             logger.info("Slack Bot 已启动")
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             set_status("slack", "error", str(e))
             raise
 

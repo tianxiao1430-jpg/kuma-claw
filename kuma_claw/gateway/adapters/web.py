@@ -78,7 +78,7 @@ class WebAdapter(BaseAdapter):
         for ws in self.connections:
             try:
                 await ws.send_json(message)
-            except Exception:
+            except (RuntimeError, ValueError, OSError):
                 self.connections.discard(ws)
 
     async def _handle_websocket(self, websocket: WebSocket):

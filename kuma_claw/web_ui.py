@@ -364,7 +364,7 @@ async def oauth_callback(
             """
         )
 
-    except Exception as e:
+    except (httpx.HTTPError, ValueError, KeyError) as e:
         logger.error(f"OAuth token exchange failed: {e}")
         return HTMLResponse(
             content=f"""

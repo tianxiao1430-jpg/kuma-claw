@@ -174,7 +174,7 @@ def web_search(query: str, limit: int = 5) -> str:
             for r in results_raw
         ]
         return "\n\n".join(results) if results else f"没有找到关于 '{query}' 的结果。"
-    except Exception as e:
+    except (ImportError, OSError, ValueError, RuntimeError) as e:
         logger.error(f"搜索失败：{e}")
         return f"搜索失败：{str(e)}"
 
@@ -199,7 +199,7 @@ def _load_google_workspace_toolsets():
     except ImportError:
         logger.warning("Google Workspace 工具集不可用")
         _cache.google_workspace_toolsets_cache = []
-    except Exception as e:
+    except (AttributeError, RuntimeError, ValueError) as e:
         logger.error(f"加载 Google Workspace 工具集失败：{e}")
         _cache.google_workspace_toolsets_cache = []
 
@@ -222,7 +222,7 @@ def _get_skill_manager():
 
         _cache.skill_manager_cache = skill_manager
         logger.debug(f"SkillManager 加载完成，技能数量: {len(_cache.skill_manager_cache.skills)}")
-    except Exception as e:
+    except (ImportError, AttributeError, RuntimeError) as e:
         logger.error(f"无法加载 SkillManager: {e}")
         return None
     return _cache.skill_manager_cache

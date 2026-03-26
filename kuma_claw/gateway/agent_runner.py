@@ -66,7 +66,7 @@ class AgentRunner:
             except LLMAPIError as e:
                 logger.error(f"LLM API call failed (retries exhausted): {e}")
                 return "Sorry, the service is temporarily unavailable. Please try again later."
-            except Exception as e:
+            except (RuntimeError, ValueError, asyncio.CancelledError) as e:
                 logger.error(f"Agent run failed: {e}")
                 return f"An error occurred while processing your request: {e}"
 
@@ -90,7 +90,7 @@ class AgentRunner:
                 dynamic_tools = get_tools(text)
                 agent_copy.tools = dynamic_tools
                 logger.debug(f"Injected {len(dynamic_tools)} tools for request")
-            except Exception as e:
+            except (RuntimeError, ValueError, asyncio.CancelledError) as e:
                 logger.error(f"Dynamic tool injection failed: {e}")
 
             # Build message parts
@@ -131,6 +131,6 @@ class AgentRunner:
             raise
         except TimeoutError:
             raise
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             logger.error(f"Agent run error: {e}")
             raise LLMAPIError(f"LLM API call failed: {e}") from e

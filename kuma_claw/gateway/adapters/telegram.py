@@ -63,7 +63,7 @@ class TelegramAdapter(BaseAdapter):
             await self.app.start()
             await self.app.updater.start_polling()
             set_status("telegram", "connected")
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             set_status("telegram", "error", str(e))
             raise
 

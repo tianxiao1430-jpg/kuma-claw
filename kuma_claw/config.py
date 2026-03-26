@@ -81,7 +81,7 @@ def _load_secrets_file() -> dict:
             encrypted_data = json.load(f)
         # 解密所有值
         return {k: _decrypt_value(v) for k, v in encrypted_data.items()}
-    except Exception as e:
+    except (json.JSONDecodeError, OSError, ValueError) as e:
         logger.debug(f"Failed to load secrets file: {e}")
         return {}
 
@@ -131,7 +131,7 @@ class Config:
                 value = keyring.get_password(KEYRING_SERVICE, key)
                 if value:
                     return value
-            except Exception as e:
+            except (RuntimeError, OSError) as e:
                 logger.debug(f"Failed to get secret '{key}' from keyring: {e}")
 
         # 2. 尝试加密文件
@@ -158,7 +158,7 @@ class Config:
                 keyring.set_password(KEYRING_SERVICE, key, value)
                 storage_type = "keyring"
                 stored = True
-            except Exception as e:
+            except (RuntimeError, OSError) as e:
                 logger.debug(f"Failed to set secret '{key}' in keyring: {e}")
 
         # 2. 回退加密文件
@@ -170,7 +170,7 @@ class Config:
                 _save_secrets_file(self._secrets_cache)
                 storage_type = "encrypted-file"
                 stored = True
-            except Exception as e:
+            except (OSError, json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"Failed to store {key}: {e}")
 
         if stored and storage_type != "keyring":
