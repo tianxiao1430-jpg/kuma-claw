@@ -16,9 +16,9 @@ def config():
         original_home = os.environ.get("HOME")
         os.environ["HOME"] = tmpdir
 
-        from kuma_claw import config as config_module
-
         from pathlib import Path
+
+        from kuma_claw import config as config_module
 
         config_module.CONFIG_DIR = Path(tmpdir) / ".kuma-claw"
         config_module.CONFIG_FILE = Path(tmpdir) / ".kuma-claw" / "config.json"

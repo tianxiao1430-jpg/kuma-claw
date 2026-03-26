@@ -16,12 +16,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from kuma_claw.skills.skill_manager import (
+    SecurityError,
     Skill,
     SkillManager,
-    SecurityError,
     SkillValidationError,
 )
-
 
 # ============================================================
 # テスト用スキルディレクトリ作成ヘルパー

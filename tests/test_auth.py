@@ -14,8 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kuma_claw.auth import OAuthTokenManager, OAuthFlow
-
+from kuma_claw.auth import OAuthFlow, OAuthTokenManager
 
 # ============================================================
 # フィクスチャ

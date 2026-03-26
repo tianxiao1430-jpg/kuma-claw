@@ -3,55 +3,69 @@ tests/test_web_ui.py
 Web UI API エンドポイントのテスト（Issue #104）
 
 カバー範囲:
-- GET / ホームページ
-- POST /save/model モデル保存
-- POST /save/google Google API Key 保存
-- POST /save/telegram Telegram Token 保存
-- POST /save/oauth OAuth 設定保存
-- GET /api/status ステータス取得
-- GET /oauth/callback OAuth コールバック（エラーケース）
+- GET /  ホームページ
+- POST /api/model  モデル保存
+- POST /api/google-key  Google API Key 保存
+- POST /api/telegram  Telegram Token 保存
+- GET /api/status  ステータス取得
+- GET /oauth/callback  OAuth コールバック（エラーケース・XSS 防止）
 """
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+import kuma_claw.web_ui as web_ui_module
 
 # ============================================================
 # フィクスチャ
 # ============================================================
 
 
+@pytest.fixture(autouse=True)
+def bypass_auth(monkeypatch):
+    """認証ミドルウェアをバイパスする（テスト用）
+    get_web_ui_token が None を返すと認証スキップになる。
+    """
+    monkeypatch.setattr(web_ui_module.config, "get_web_ui_token", lambda: None)
+
+
 @pytest.fixture
-def mock_config(tmp_path):
-    """テスト用モック Config"""
-    config = MagicMock()
-    config.get_model.return_value = "gemini-3.1-flash"
-    config.config = {
-        "model": "gemini-3.1-flash",
-        "channels": {
-            "slack": {"enabled": False},
-            "telegram": {"enabled": False},
-        },
+def mock_config(monkeypatch):
+    """テスト用モック Config の主要メソッドを差し替える"""
+    monkeypatch.setattr(web_ui_module.config, "get_google_api_key", lambda: None)
+    monkeypatch.setattr(web_ui_module.config, "get_openai_api_key", lambda: None)
+    monkeypatch.setattr(web_ui_module.config, "get_anthropic_api_key", lambda: None)
+    monkeypatch.setattr(web_ui_module.config, "is_slack_enabled", lambda: False)
+    monkeypatch.setattr(web_ui_module.config, "is_telegram_enabled", lambda: False)
+    monkeypatch.setattr(web_ui_module.config, "get_google_oauth_client_id", lambda: None)
+
+    set_model_mock = MagicMock()
+    set_google_key_mock = MagicMock()
+    set_telegram_mock = MagicMock()
+    monkeypatch.setattr(web_ui_module.config, "set_model", set_model_mock)
+    monkeypatch.setattr(web_ui_module.config, "set_google_api_key", set_google_key_mock)
+    monkeypatch.setattr(web_ui_module.config, "set_telegram_token", set_telegram_mock)
+
+    return {
+        "set_model": set_model_mock,
+        "set_google_api_key": set_google_key_mock,
+        "set_telegram_token": set_telegram_mock,
     }
-    config.get_google_api_key.return_value = None
-    config.get_telegram_token.return_value = None
-    config.get_slack_tokens.return_value = (None, None)
-    config.get_oauth_credentials.return_value = (None, None)
-    config.get_web_ui_token.return_value = None  # 認証なし（テスト用）
-    config.web_ui_port = 8080
-    return config
 
 
 @pytest.fixture
-def client(mock_config):
+def mock_token_manager(monkeypatch):
+    """テスト用モック token_manager"""
+    monkeypatch.setattr(web_ui_module.token_manager, "get_google_tokens", lambda: None)
+    monkeypatch.setattr(web_ui_module.token_manager, "token_expired", lambda: True)
+
+
+@pytest.fixture
+def client():
     """テスト用 FastAPI TestClient"""
-    with patch("kuma_claw.web_ui.config", mock_config):
-        from kuma_claw.web_ui import create_app
-        app = create_app()
-        return TestClient(app, raise_server_exceptions=False)
+    return TestClient(web_ui_module.app, raise_server_exceptions=False)
 
 
 # ============================================================
@@ -62,16 +76,16 @@ def client(mock_config):
 class TestHomePage:
     """GET / ホームページのテスト"""
 
-    def test_homepage_returns_200(self, client):
-        """ホームページが 200 を返す"""
-        response = client.get("/")
-        assert response.status_code in (200, 307, 302)  # リダイレクトも許容
+    def test_homepage_returns_200(self, client, mock_config, mock_token_manager):
+        """ホームページが 200 またはリダイレクトを返す"""
+        response = client.get("/", follow_redirects=False)
+        assert response.status_code in (200, 302, 307)
 
-    def test_homepage_contains_html(self, client):
-        """ホームページが HTML を返す"""
-        response = client.get("/")
-        if response.status_code == 200:
-            assert "html" in response.headers.get("content-type", "").lower()
+    def test_homepage_contains_html(self, client, mock_config, mock_token_manager):
+        """ホームページが HTML コンテンツを返す"""
+        response = client.get("/", follow_redirects=True)
+        assert response.status_code == 200
+        assert "html" in response.headers.get("content-type", "").lower()
 
 
 # ============================================================
@@ -80,53 +94,52 @@ class TestHomePage:
 
 
 class TestSaveModel:
-    """POST /save/model のテスト"""
+    """POST /api/model のテスト"""
 
     def test_save_valid_model(self, client, mock_config):
-        """有効なモデルを保存できる"""
+        """有効なモデルを保存するとリダイレクトされる"""
         response = client.post(
-            "/save/model",
+            "/api/model",
             data={"model": "gemini-3.1-flash"},
             follow_redirects=False,
         )
-        # リダイレクトまたは 200
-        assert response.status_code in (200, 302, 307)
+        assert response.status_code in (200, 302, 303, 307)
 
     def test_save_model_calls_set_model(self, client, mock_config):
-        """モデル保存時に set_model が呼ばれる"""
+        """モデル保存時に config.set_model が呼ばれる"""
         client.post(
-            "/save/model",
+            "/api/model",
             data={"model": "gemini-3.1-flash-lite"},
             follow_redirects=False,
         )
-        mock_config.set_model.assert_called_once_with("gemini-3.1-flash-lite")
+        mock_config["set_model"].assert_called_once_with("gemini-3.1-flash-lite")
 
 
 # ============================================================
-# API Key 保存のテスト
+# Google API Key 保存のテスト
 # ============================================================
 
 
 class TestSaveGoogleKey:
-    """POST /save/google のテスト"""
+    """POST /api/google-key のテスト"""
 
     def test_save_google_api_key(self, client, mock_config):
-        """Google API Key を保存できる"""
+        """Google API Key を保存するとリダイレクトされる"""
         response = client.post(
-            "/save/google",
-            data={"google_api_key": "AIzaSy_test_key"},
+            "/api/google-key",
+            data={"api_key": "AIzaSy_test_key"},
             follow_redirects=False,
         )
-        assert response.status_code in (200, 302, 307)
+        assert response.status_code in (200, 302, 303, 307)
 
     def test_save_google_key_calls_set_google_api_key(self, client, mock_config):
-        """保存時に set_google_api_key が呼ばれる"""
+        """Google API Key 保存時に config.set_google_api_key が呼ばれる"""
         client.post(
-            "/save/google",
-            data={"google_api_key": "AIzaSy_test_key"},
+            "/api/google-key",
+            data={"api_key": "AIzaSy_test_key"},
             follow_redirects=False,
         )
-        mock_config.set_google_api_key.assert_called_once_with("AIzaSy_test_key")
+        mock_config["set_google_api_key"].assert_called_once_with("AIzaSy_test_key")
 
 
 # ============================================================
@@ -135,20 +148,21 @@ class TestSaveGoogleKey:
 
 
 class TestSaveTelegram:
-    """POST /save/telegram のテスト"""
+    """POST /api/telegram のテスト"""
 
     def test_save_telegram_token(self, client, mock_config):
-        """Telegram Token を保存できる"""
+        """Telegram Token を保存するとリダイレクトされる"""
         response = client.post(
-            "/save/telegram",
-            data={"telegram_token": "123456:ABC-test"},
+            "/api/telegram",
+            data={"token": "1234567890:ABCdef"},
             follow_redirects=False,
         )
-        assert response.status_code in (200, 302, 307)
+        assert response.status_code in (200, 302, 303, 307)
+        mock_config["set_telegram_token"].assert_called_once_with("1234567890:ABCdef")
 
 
 # ============================================================
-# ステータス API のテスト
+# /api/status エンドポイントのテスト
 # ============================================================
 
 
@@ -156,19 +170,19 @@ class TestStatusAPI:
     """GET /api/status のテスト"""
 
     def test_status_returns_json(self, client):
-        """/api/status が JSON を返す"""
+        """ステータス API が JSON を返す"""
         response = client.get("/api/status")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, dict)
 
     def test_status_contains_services(self, client):
-        """/api/status にサービス情報が含まれる"""
+        """ステータス API に telegram と slack が含まれる"""
         response = client.get("/api/status")
-        if response.status_code == 200:
-            data = response.json()
-            # services または telegram/slack キーが存在する
-            assert any(k in data for k in ("services", "telegram", "slack", "web_ui"))
+        assert response.status_code == 200
+        data = response.json()
+        assert "telegram" in data
+        assert "slack" in data
 
 
 # ============================================================
@@ -180,21 +194,19 @@ class TestOAuthCallback:
     """GET /oauth/callback のテスト"""
 
     def test_callback_with_error_param(self, client):
-        """error パラメータがある場合はエラーページを返す"""
+        """error パラメータがある場合は 400 を返す"""
         response = client.get("/oauth/callback?error=access_denied")
-        assert response.status_code in (200, 400, 500)
-        if response.status_code == 200:
-            # XSS 対策: スクリプトタグがエスケープされている
-            assert "<script>" not in response.text
+        assert response.status_code in (400, 200)
 
     def test_callback_xss_prevention(self, client):
-        """XSS 攻撃ペイロードがエスケープされる（Issue #103 修正の検証）"""
+        """XSS 攻撃コードがそのまま HTML に埋め込まれない（Issue #103 修正の検証）"""
         xss_payload = "<script>alert('xss')</script>"
         response = client.get(f"/oauth/callback?error={xss_payload}")
-        # スクリプトタグがそのまま出力されていないことを確認
-        assert "<script>alert" not in response.text
+        body = response.text
+        # <script>タグがそのまま出力されていないことを確認
+        assert "<script>alert" not in body
 
     def test_callback_without_code(self, client):
-        """code パラメータなしのコールバックはエラーを返す"""
-        response = client.get("/oauth/callback")
-        assert response.status_code in (200, 400, 422, 500)
+        """code パラメータがない場合は 400 を返す"""
+        response = client.get("/oauth/callback?state=some_state")
+        assert response.status_code in (400, 200)
