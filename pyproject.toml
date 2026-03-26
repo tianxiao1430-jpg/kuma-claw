@@ -23,23 +23,24 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
+# 依赖版本锁定主版本上限，防止破坏性升级（Issue #109）
 dependencies = [
-    "google-adk>=1.0.0",
-    "google-genai>=1.0.0",
-    "slack-bolt>=1.18.0",
-    "python-telegram-bot>=20.0",
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "websockets>=12.0",
-    "jinja2>=3.1.0",
-    "python-multipart>=0.0.6",
-    "click>=8.1.0",
-    "rich>=13.0.0",
-    "keyring>=24.0.0",
-    "requests>=2.31.0",
-    "python-dotenv>=1.0.0",
-    "duckduckgo-search>=6.0.0",
-    "tenacity>=8.2.0",
+    "google-adk>=1.0.0,<2.0.0",
+    "google-genai>=1.0.0,<2.0.0",
+    "slack-bolt>=1.18.0,<2.0.0",
+    "python-telegram-bot>=20.0,<22.0",
+    "fastapi>=0.104.0,<1.0.0",
+    "uvicorn>=0.24.0,<1.0.0",
+    "websockets>=12.0,<16.0",
+    "jinja2>=3.1.0,<4.0.0",
+    "python-multipart>=0.0.6,<1.0.0",
+    "click>=8.1.0,<9.0.0",
+    "rich>=13.0.0,<15.0.0",
+    "keyring>=24.0.0,<26.0.0",
+    "requests>=2.31.0,<3.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "duckduckgo-search>=6.0.0,<10.0.0",
+    "tenacity>=8.2.0,<10.0.0",
 ]
 
 [project.optional-dependencies]

@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import os
+import secrets
 import uuid
 from pathlib import Path
 
@@ -170,10 +171,10 @@ class Config:
                 storage_type = "encrypted-file"
                 stored = True
             except Exception as e:
-                print(f"⚠️ Warning: Failed to store {key}: {e}")
+                logger.warning(f"Failed to store {key}: {e}")
 
         if stored and storage_type != "keyring":
-            print(f"ℹ️ Info: {key} stored in {storage_type} (keyring unavailable)")
+            logger.info(f"{key} stored in {storage_type} (keyring unavailable)")
 
         return stored
 
@@ -257,6 +258,31 @@ class Config:
 
     def get_google_oauth_client_secret(self) -> str | None:
         return self._get_secret("google_oauth_client_secret")
+
+    # ============================================
+    # Web UI Token（Issue #103-2）
+    # ============================================
+
+    def get_web_ui_token(self) -> str | None:
+        """获取 Web UI 访问密码，首次调用时自动生成"""
+        token_file = CONFIG_DIR / "ui_token.txt"
+        if token_file.exists():
+            return token_file.read_text().strip() or None
+        # 首次启动：自动生成并保存
+        new_token = secrets.token_urlsafe(32)
+        token_file.write_text(new_token)
+        token_file.chmod(0o600)
+        logger.info(f"Web UI token generated and saved to {token_file}")
+        return new_token
+
+    # ============================================
+    # 端口配置（Issue #107）
+    # ============================================
+
+    @property
+    def web_ui_port(self) -> int:
+        """获取 Web UI 端口，支持环境变量 KUMA_WEB_PORT 覆盖"""
+        return int(os.getenv("KUMA_WEB_PORT", str(self.config.get("web_ui_port", 8080))))
 
     # ============================================
     # 便捷方法

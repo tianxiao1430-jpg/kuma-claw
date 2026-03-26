@@ -270,6 +270,17 @@ class Skill:
                         f"Skill: {self.metadata.get('name', 'unknown')}"
                     )
 
+    def _safe_import(self, name: str, *args, **kwargs):
+        """白名单化的安全 import，防止沙箱逃逸（Issue #103）"""
+        # 只允许 ALLOWED_MODULES 中定义的模块
+        top_level = name.split(".")[0]
+        if name not in self.ALLOWED_MODULES and top_level not in self.ALLOWED_MODULES:
+            raise ImportError(
+                f"Module '{name}' is not allowed in skill sandbox. "
+                f"Allowed modules: {sorted(self.ALLOWED_MODULES)}"
+            )
+        return __import__(name, *args, **kwargs)
+
     def _create_safe_globals(self) -> dict:
         """创建安全的全局命名空间"""
 
@@ -313,7 +324,7 @@ class Skill:
             "tuple": tuple,
             "type": type,
             "zip": zip,
-            "__import__": __import__,
+            "__import__": self._safe_import,
             "Exception": Exception,
             "ValueError": ValueError,
             "TypeError": TypeError,
