@@ -126,9 +126,7 @@ async def login(request: Request, token: str = Form(...)):
             status_code=401,
         )
     response = RedirectResponse(url="/", status_code=303)
-    response.set_cookie(
-        "kuma_ui_token", token, httponly=True, samesite="lax", max_age=86400 * 7
-    )
+    response.set_cookie("kuma_ui_token", token, httponly=True, samesite="lax", max_age=86400 * 7)
     return response
 
 

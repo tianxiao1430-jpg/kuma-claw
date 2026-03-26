@@ -195,7 +195,9 @@ def _load_google_workspace_toolsets():
         from .tools.adk_google_workspace import create_all_google_workspace_toolsets
 
         _cache.google_workspace_toolsets_cache = create_all_google_workspace_toolsets()
-        logger.info(f"已加载 {len(_cache.google_workspace_toolsets_cache)} 个 Google Workspace 工具集")
+        logger.info(
+            f"已加载 {len(_cache.google_workspace_toolsets_cache)} 个 Google Workspace 工具集"
+        )
     except ImportError:
         logger.warning("Google Workspace 工具集不可用")
         _cache.google_workspace_toolsets_cache = []
