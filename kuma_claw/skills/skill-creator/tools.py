@@ -244,7 +244,7 @@ EXAMPLES = [
         return f"❌ 权限错误：{str(e)}"
     except OSError as e:
         return f"❌ 系统错误：{str(e)}"
-    except (RuntimeError, ValueError, OSError) as e:
+    except (RuntimeError, ValueError) as e:
         return f"❌ 初始化失败：{str(e)}"
 
 
@@ -540,7 +540,7 @@ def package_skill(
         return f"❌ 权限错误：{str(e)}"
     except OSError as e:
         return f"❌ 系统错误：{str(e)}"
-    except (RuntimeError, ValueError, OSError) as e:
+    except (RuntimeError, ValueError) as e:
         return f"❌ 打包失败：{str(e)}"
 
 

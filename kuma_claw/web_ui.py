@@ -9,6 +9,7 @@ import secrets
 from html import escape
 from pathlib import Path
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -364,7 +365,7 @@ async def oauth_callback(
             """
         )
 
-    except (httpx.HTTPError, ValueError, KeyError) as e:
+    except (httpx.HTTPError, ValueError, KeyError, OSError) as e:
         logger.error(f"OAuth token exchange failed: {e}")
         return HTMLResponse(
             content=f"""
