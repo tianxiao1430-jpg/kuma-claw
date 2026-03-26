@@ -276,7 +276,7 @@ class Gateway:
             logger.info(f"Stopping adapter: {channel.value}")
             try:
                 await adapter.stop()
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 logger.error(f"Error stopping adapter {channel.value}: {e}")
 
         await self.session_manager.close()

@@ -71,7 +71,7 @@ class SQLiteSessionService(BaseSessionService):
         """将 Event 对象序列化为 dict（参考 ADK StorageEvent.from_event）"""
         try:
             return event.model_dump(exclude_none=True, mode="json")
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError) as e:
             logger.error(f"序列化 Event 失败：{e}")
             return {}
 
@@ -79,7 +79,7 @@ class SQLiteSessionService(BaseSessionService):
         """将 dict 反序列化为 Event 对象（参考 ADK StorageEvent.to_event）"""
         try:
             return Event.model_validate(event_dict)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"反序列化 Event 失败：{e}")
             return None
 
@@ -93,7 +93,7 @@ class SQLiteSessionService(BaseSessionService):
                 if event:
                     events.append(event)
             return events
-        except Exception as e:
+        except json.JSONDecodeError as e:
             logger.error(f"反序列化 events 失败：{e}")
             return []
 
@@ -154,7 +154,7 @@ class SQLiteSessionService(BaseSessionService):
         updated_at_str = row["updated_at"]
         try:
             last_update_time = datetime.fromisoformat(updated_at_str).timestamp()
-        except Exception:
+        except (ValueError, TypeError):
             last_update_time = 0.0
 
         # 从数据库加载 events

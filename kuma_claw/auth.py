@@ -124,7 +124,7 @@ class OAuthTokenManager:
             )
 
             return token_data["access_token"]
-        except Exception as e:
+        except (httpx.HTTPError, KeyError, ValueError) as e:
             logger.error(f"刷新 Token 失败: {e}")
             return None
 

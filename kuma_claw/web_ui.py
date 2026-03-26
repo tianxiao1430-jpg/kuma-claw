@@ -9,6 +9,7 @@ import secrets
 from html import escape
 from pathlib import Path
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -125,9 +126,7 @@ async def login(request: Request, token: str = Form(...)):
             status_code=401,
         )
     response = RedirectResponse(url="/", status_code=303)
-    response.set_cookie(
-        "kuma_ui_token", token, httponly=True, samesite="lax", max_age=86400 * 7
-    )
+    response.set_cookie("kuma_ui_token", token, httponly=True, samesite="lax", max_age=86400 * 7)
     return response
 
 
@@ -364,7 +363,7 @@ async def oauth_callback(
             """
         )
 
-    except Exception as e:
+    except (httpx.HTTPError, ValueError, KeyError, OSError) as e:
         logger.error(f"OAuth token exchange failed: {e}")
         return HTMLResponse(
             content=f"""

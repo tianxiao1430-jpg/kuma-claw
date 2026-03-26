@@ -189,7 +189,7 @@ class Skill:
 
         except SecurityError:
             raise
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, ImportError) as e:
             logger.error(f"Failed to load tools from {self.dir}: {e}")
             return []
 
@@ -229,7 +229,7 @@ class Skill:
 
         except SecurityError:
             raise
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, ImportError) as e:
             logger.warning(f"Failed to load prompts from {self.dir}: {e}")
             return {"system": "", "examples": []}
 
@@ -367,7 +367,7 @@ class Skill:
             logger.info(f"Signature verified for skill: {self.name}")
             return True
 
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, ImportError) as e:
             logger.error(f"Signature verification error: {e}")
             raise SecurityError(f"Signature verification failed: {e}") from e
 
@@ -470,7 +470,7 @@ def validate_path_safe(path: Path, allowed_dirs: list[Path]) -> bool:
 
         return False
 
-    except Exception:
+    except (RuntimeError, ValueError, OSError):
         return False
 
 
@@ -527,7 +527,7 @@ class SkillManager:
                 logger.error(f"Security violation in skill {skill_dir.name}: {e}")
             except SkillValidationError as e:
                 logger.error(f"Invalid skill {skill_dir.name}: {e}")
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError, ImportError) as e:
                 logger.error(f"Failed to load skill {skill_dir.name}: {e}")
 
     def get_skill_by_trigger(self, text: str) -> Skill | None:
@@ -586,7 +586,7 @@ class SkillManager:
             self.skills[skill.name] = skill
             logger.info(f"Reloaded skill: {skill.name}")
             return True
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, ImportError) as e:
             logger.error(f"Failed to reload skill {skill_name}: {e}")
             return False
 

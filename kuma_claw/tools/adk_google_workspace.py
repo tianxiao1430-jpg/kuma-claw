@@ -93,7 +93,7 @@ def _create_toolset(
         )
         logger.info(f"{tool_name} 工具集已加载")
         return toolset
-    except Exception as e:
+    except (ValueError, TypeError, RuntimeError) as e:
         logger.error(f"创建 {tool_name} 工具集失败: {e}")
         return None
 

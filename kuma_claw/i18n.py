@@ -73,7 +73,7 @@ class I18nManager:
             try:
                 with open(self.lang_file, encoding="utf-8") as f:
                     self.lang = json.load(f).get("lang", "zh")
-            except Exception:
+            except (json.JSONDecodeError, OSError, KeyError):
                 pass
 
     def save_lang(self, lang):

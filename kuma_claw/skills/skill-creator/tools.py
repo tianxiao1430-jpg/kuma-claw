@@ -72,7 +72,7 @@ except ImportError:
                 if resolved.is_relative_to(allowed.resolve()):
                     return True
             return False
-        except Exception:
+        except (RuntimeError, ValueError, OSError):
             return False
 
 
@@ -244,7 +244,7 @@ EXAMPLES = [
         return f"❌ 权限错误：{str(e)}"
     except OSError as e:
         return f"❌ 系统错误：{str(e)}"
-    except Exception as e:
+    except (RuntimeError, ValueError) as e:
         return f"❌ 初始化失败：{str(e)}"
 
 
@@ -341,7 +341,7 @@ def validate_skill(skill_name: str, skills_dir: str = "kuma_claw/skills") -> str
 
             except json.JSONDecodeError as e:
                 errors.append(f"skill.json 格式错误: {e}")
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 errors.append(f"读取 skill.json 失败: {str(e)}")
 
         # 8. 检查 tools.py
@@ -354,7 +354,7 @@ def validate_skill(skill_name: str, skills_dir: str = "kuma_claw/skills") -> str
                         warnings.append("tools.py 中未找到 TOOLS 列表")
                     if "FunctionTool" not in content:
                         warnings.append("tools.py 中未使用 FunctionTool")
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 errors.append(f"读取 tools.py 失败: {str(e)}")
 
         # 9. 检查 prompts.py
@@ -365,7 +365,7 @@ def validate_skill(skill_name: str, skills_dir: str = "kuma_claw/skills") -> str
                     content = f.read()
                     if "SYSTEM_PROMPT" not in content:
                         warnings.append("prompts.py 中未找到 SYSTEM_PROMPT")
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 errors.append(f"读取 prompts.py 失败: {str(e)}")
 
         # 10. 检查总文件数和大小
@@ -380,7 +380,7 @@ def validate_skill(skill_name: str, skills_dir: str = "kuma_claw/skills") -> str
 
             if file_count > MAX_FILES_COUNT:
                 warnings.append(f"文件数量 {file_count} 超过建议值 {MAX_FILES_COUNT}")
-        except Exception:
+        except (RuntimeError, ValueError, OSError):
             pass
 
         # 11. 生成结果
@@ -405,7 +405,7 @@ def validate_skill(skill_name: str, skills_dir: str = "kuma_claw/skills") -> str
 
     except PermissionError as e:
         return f"❌ 权限错误：{str(e)}"
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError) as e:
         return f"❌ 验证失败：{str(e)}"
 
 
@@ -540,7 +540,7 @@ def package_skill(
         return f"❌ 权限错误：{str(e)}"
     except OSError as e:
         return f"❌ 系统错误：{str(e)}"
-    except Exception as e:
+    except (RuntimeError, ValueError) as e:
         return f"❌ 打包失败：{str(e)}"
 
 

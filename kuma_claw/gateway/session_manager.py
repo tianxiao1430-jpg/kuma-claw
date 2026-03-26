@@ -61,7 +61,7 @@ class UnifiedSessionManager:
             logger.debug(f"Session ready: key={key_str}, session_id={session_id}")
             return session_id
 
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             logger.error(f"Failed to get/create session for {key_str}: {e}")
             raise
 
@@ -80,7 +80,7 @@ class UnifiedSessionManager:
             del self._sessions[key_str]
             logger.debug(f"Session cleared: key={key_str}")
             return True
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             logger.error(f"Failed to clear session {key_str}: {e}")
             return False
 
