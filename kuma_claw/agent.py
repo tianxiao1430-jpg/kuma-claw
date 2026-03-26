@@ -18,47 +18,66 @@ from google.adk.tools import FunctionTool
 logger = logging.getLogger("kuma_claw")
 
 # ============================================
-# 懒加载缓存（带 TTL 失效机制）
+# 缓存管理器（Issue #106：将全局变量重构为单例类）
 # ============================================
-
-_model_cache: Any | None = None
-_model_cache_time: float = 0
-_google_workspace_toolsets_cache: list | None = None
-_google_workspace_cache_time: float = 0
-_skill_manager_cache: Any | None = None
-_agent_cache: LlmAgent | None = None
-_agent_cache_time: float = 0
 
 # 缓存 TTL（秒）
 CACHE_TTL = 300  # 5 分钟
 
 
+class AgentCache:
+    """单例缓存管理器
+
+    将原来分散的 6 个全局变量封装为单一类，
+    提高可测试性和并发安全性。
+    """
+
+    _instance: Optional["AgentCache"] = None
+
+    def __new__(cls) -> "AgentCache":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._init()
+        return cls._instance
+
+    def _init(self):
+        self.model_cache: Any | None = None
+        self.model_cache_time: float = 0
+        self.google_workspace_toolsets_cache: list | None = None
+        self.google_workspace_cache_time: float = 0
+        self.skill_manager_cache: Any | None = None
+        self.agent_cache: LlmAgent | None = None
+        self.agent_cache_time: float = 0
+
+    def reset(self):
+        """重置所有缓存"""
+        self._init()
+
+    def is_valid(self, cache_time: float) -> bool:
+        """检查缓存是否有效"""
+        if cache_time == 0:
+            return False
+        return (time.time() - cache_time) < CACHE_TTL
+
+
+# 全局缓存实例
+_cache = AgentCache()
+
+
 def reset_cache():
-    """重置所有缓存"""
-    global _agent_cache, _google_workspace_toolsets_cache, _model_cache, _skill_manager_cache
-    global _agent_cache_time, _google_workspace_cache_time, _model_cache_time
-    _model_cache = None
-    _model_cache_time = 0
-    _agent_cache = None
-    _agent_cache_time = 0
-    _google_workspace_toolsets_cache = None
-    _google_workspace_cache_time = 0
-    _skill_manager_cache = None
+    """重置所有缓存（向后兼容）"""
+    _cache.reset()
 
 
 def _is_cache_valid(cache_time: float) -> bool:
-    """检查缓存是否有效"""
-    if cache_time == 0:
-        return False
-    return (time.time() - cache_time) < CACHE_TTL
+    """检查缓存是否有效（向后兼容）"""
+    return _cache.is_valid(cache_time)
 
 
 def get_model():
     """获取模型配置（懒加载 + TTL 缓存）"""
-    global _model_cache, _model_cache_time
-
-    if _model_cache is not None and _is_cache_valid(_model_cache_time):
-        return _model_cache
+    if _cache.model_cache is not None and _cache.is_valid(_cache.model_cache_time):
+        return _cache.model_cache
 
     try:
         from .config import config
@@ -70,12 +89,12 @@ def get_model():
     if isinstance(model, str) and model.startswith(("openai/", "anthropic/", "deepseek/")):
         from google.adk.models.lite_llm import LiteLlm
 
-        _model_cache = LiteLlm(model=model)
+        _cache.model_cache = LiteLlm(model=model)
     else:
-        _model_cache = model
+        _cache.model_cache = model
 
-    _model_cache_time = time.time()
-    return _model_cache
+    _cache.model_cache_time = time.time()
+    return _cache.model_cache
 
 
 # ============================================
@@ -167,27 +186,25 @@ def web_search(query: str, limit: int = 5) -> str:
 
 def _load_google_workspace_toolsets():
     """加载 Google Workspace 工具集（懒加载 + TTL 缓存）"""
-    global _google_workspace_toolsets_cache, _google_workspace_cache_time
-
-    if _google_workspace_toolsets_cache is not None and _is_cache_valid(
-        _google_workspace_cache_time
+    if _cache.google_workspace_toolsets_cache is not None and _cache.is_valid(
+        _cache.google_workspace_cache_time
     ):
-        return _google_workspace_toolsets_cache
+        return _cache.google_workspace_toolsets_cache
 
     try:
         from .tools.adk_google_workspace import create_all_google_workspace_toolsets
 
-        _google_workspace_toolsets_cache = create_all_google_workspace_toolsets()
-        logger.info(f"已加载 {len(_google_workspace_toolsets_cache)} 个 Google Workspace 工具集")
+        _cache.google_workspace_toolsets_cache = create_all_google_workspace_toolsets()
+        logger.info(f"已加载 {len(_cache.google_workspace_toolsets_cache)} 个 Google Workspace 工具集")
     except ImportError:
         logger.warning("Google Workspace 工具集不可用")
-        _google_workspace_toolsets_cache = []
+        _cache.google_workspace_toolsets_cache = []
     except Exception as e:
         logger.error(f"加载 Google Workspace 工具集失败：{e}")
-        _google_workspace_toolsets_cache = []
+        _cache.google_workspace_toolsets_cache = []
 
-    _google_workspace_cache_time = time.time()
-    return _google_workspace_toolsets_cache
+    _cache.google_workspace_cache_time = time.time()
+    return _cache.google_workspace_toolsets_cache
 
 
 # ============================================
@@ -197,19 +214,18 @@ def _load_google_workspace_toolsets():
 
 def _get_skill_manager():
     """获取 SkillManager 实例"""
-    global _skill_manager_cache
-    if _skill_manager_cache is not None:
-        return _skill_manager_cache
+    if _cache.skill_manager_cache is not None:
+        return _cache.skill_manager_cache
 
     try:
         from .skills.skill_manager import skill_manager
 
-        _skill_manager_cache = skill_manager
-        logger.debug(f"SkillManager 加载完成，技能数量: {len(_skill_manager_cache.skills)}")
+        _cache.skill_manager_cache = skill_manager
+        logger.debug(f"SkillManager 加载完成，技能数量: {len(_cache.skill_manager_cache.skills)}")
     except Exception as e:
         logger.error(f"无法加载 SkillManager: {e}")
         return None
-    return _skill_manager_cache
+    return _cache.skill_manager_cache
 
 
 def get_core_tools() -> list:
@@ -327,13 +343,11 @@ def get_agent(force_refresh: bool = False) -> LlmAgent:
     Args:
         force_refresh: 是否强制刷新缓存
     """
-    global _agent_cache, _agent_cache_time
-
-    if _agent_cache is None or not _is_cache_valid(_agent_cache_time) or force_refresh:
-        _agent_cache = create_agent()
-        _agent_cache_time = time.time()
-        logger.debug("Agent 缓存已过期或不存在，重新创建")
-    return _agent_cache
+    if _cache.agent_cache is None or not _cache.is_valid(_cache.agent_cache_time) or force_refresh:
+        _cache.agent_cache = create_agent()
+        _cache.agent_cache_time = time.time()
+        logger.debug("对话 Agent 缓存已过期或不存在，重新创建")
+    return _cache.agent_cache
 
 
 # ============================================

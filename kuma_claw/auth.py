@@ -4,6 +4,7 @@ Kuma Claw - OAuth 认证管理
 """
 
 import json
+import logging
 import os
 import secrets
 import threading
@@ -14,6 +15,8 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse
 
 import httpx
+
+logger = logging.getLogger("kuma_claw.auth")
 
 # ============================================
 # 配置
@@ -122,7 +125,7 @@ class OAuthTokenManager:
 
             return token_data["access_token"]
         except Exception as e:
-            print(f"刷新 Token 失败: {e}")
+            logger.error(f"刷新 Token 失败: {e}")
             return None
 
     def get_valid_access_token(self, client_id: str, client_secret: str = "") -> str | None:
@@ -155,7 +158,8 @@ class OAuthFlow:
         self.client_id = client_id
         self.client_secret = client_secret
         self.state = secrets.token_urlsafe(16)
-        self.redirect_port = 8080
+        # 使用环境变量配置端口，默认 8080（Issue #107）
+        self.redirect_port = int(os.getenv("KUMA_WEB_PORT", "8080"))
         self.redirect_uri = f"http://localhost:{self.redirect_port}/oauth/callback"
 
     def get_authorization_url(self) -> str:
@@ -247,22 +251,21 @@ class OAuthFlow:
         # 等待服务器启动
         server_ready.wait(timeout=5)
 
-        print("\n🌐 正在打开浏览器进行授权...")
-        print("   如果浏览器没有自动打开，请访问：")
-        print(f"   {auth_url}\n")
+        logger.info(f"授权地址：{auth_url}")
+        logger.info("正在打开浏览器进行授权，如果浏览器没有自动打开，请手动访问上方地址")
 
         # 打开浏览器
         webbrowser.open(auth_url)
 
         # 等待回调
-        print("[dim]等待授权完成...（最多 5 分钟）[/dim]")
+        logger.info("等待授权完成（最多 5 分钟）...")
         server_thread.join(timeout=300)
 
         if callback_received["error"]:
-            print(f"\n[red]❌ 授权失败：{callback_received['error']}[/red]")
+            logger.error(f"授权失败：{callback_received['error']}")
             return False
         elif callback_received["code"]:
-            print("\n[green]✅ 授权成功！正在换取 Token...[/green]")
+            logger.info("授权成功，正在换取 Token...")
             # 用 code 换取 tokens
             tokens = self.exchange_code_for_tokens(callback_received["code"])
             # 保存 tokens
@@ -273,10 +276,10 @@ class OAuthFlow:
                 refresh_token=tokens.get("refresh_token", ""),
                 expires_in=tokens["expires_in"],
             )
-            print("[green]✅ Token 已保存[/green]")
+            logger.info("Token 已保存")
             return True
         else:
-            print("\n[yellow]⚠️  授权超时，请重试[/yellow]")
+            logger.warning("授权超时，请重试")
             return False
 
 
