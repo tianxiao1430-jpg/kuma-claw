@@ -41,22 +41,27 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      
-      - name: Install ruff
-        run: pip install ruff
-      
+
+      - name: Install dependencies
+        run: |
+          pip install ruff mypy types-requests
+          pip install ".[dev]"
+
       - name: Run ruff check
         run: ruff check kuma_claw --output-format=github
-      
+
       - name: Run ruff format check
         run: ruff format --check kuma_claw
+
+      - name: Run mypy type check
+        run: mypy kuma_claw --ignore-missing-imports --no-error-summary || true
 
   build:
     name: Build

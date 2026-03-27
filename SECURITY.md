@@ -230,7 +230,7 @@ KUMA_ALLOWED_DIRS=/tmp,/home/user/.kuma-claw
 ### 代码配置
 
 ```python
-from skills.kuma_skills_system.scripts.skill_manager import SkillManager
+from kuma_claw.skills.skill_manager import SkillManager
 
 # 严格模式（启用所有安全特性）
 manager = SkillManager(
@@ -248,14 +248,11 @@ manager = SkillManager(
 ### 运行安全测试
 
 ```bash
-# 完整测试
-python test_skills_security.py
+# 运行安全相关测试
+pytest tests/test_skill_manager.py -v
 
-# 单项测试
-python -c "
-from test_skills_security import test_path_traversal_protection
-test_path_traversal_protection()
-"
+# 运行全部测试
+pytest
 ```
 
 ### 测试覆盖
