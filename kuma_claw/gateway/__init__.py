@@ -221,40 +221,50 @@ class Gateway:
         if not self.agent_runner:
             raise RuntimeError("AgentRunner not initialized. Call set_agent() first.")
 
-        # 1. Build SessionKey from message
-        scope = message.metadata.get("scope", message.chat_id)
-        session_key = SessionKey(
-            channel=message.channel.value,
-            user_id=message.user_id,
-            scope=scope,
-        )
+        try:
+            # 1. Build SessionKey from message
+            scope = message.metadata.get("scope", message.chat_id)
+            session_key = SessionKey(
+                channel=message.channel.value,
+                user_id=message.user_id,
+                scope=scope,
+            )
 
-        # 2. Run via AgentRunner
-        images = message.metadata.get("images")
-        raw_response = await self.agent_runner.run(
-            session_key=session_key,
-            text=message.content,
-            images=images,
-        )
+            # 2. Run via AgentRunner
+            images = message.metadata.get("images")
+            raw_response = await self.agent_runner.run(
+                session_key=session_key,
+                text=message.content,
+                images=images,
+            )
 
-        # 3. Apply extract_internal_content
-        internal, visible = extract_internal_content(raw_response)
+            # 3. Apply extract_internal_content
+            internal, visible = extract_internal_content(raw_response)
 
-        # 4. Route to get agent name (for metadata)
-        agent_id = self.router.route(message)
+            # 4. Route to get agent name (for metadata)
+            agent_id = self.router.route(message)
 
-        # 5. Return Reply
-        metadata: dict[str, Any] = {}
-        if internal:
-            metadata["internal"] = internal
+            # 5. Return Reply
+            metadata: dict[str, Any] = {}
+            if internal:
+                metadata["internal"] = internal
 
-        return Reply(
-            id=f"reply-{message.id}",
-            message_id=message.id,
-            content=visible,
-            agent=agent_id,
-            metadata=metadata,
-        )
+            return Reply(
+                id=f"reply-{message.id}",
+                message_id=message.id,
+                content=visible,
+                agent=agent_id,
+                metadata=metadata,
+            )
+        except Exception as e:
+            logger.error(f"Error processing message {message.id}: {e}")
+            return Reply(
+                id=f"reply-{message.id}",
+                message_id=message.id,
+                content="抱歉，处理消息时出现错误，请稍后重试。",
+                agent="default",
+                metadata={"error": str(e)},
+            )
 
     async def start(self):
         """启动网关 - start all registered adapters concurrently."""
@@ -267,7 +277,10 @@ class Gateway:
             logger.info(f"Starting adapter: {channel.value}")
             tasks.append(asyncio.create_task(adapter.start()))
 
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for (channel, _), result in zip(self.adapters.items(), results):
+            if isinstance(result, Exception):
+                logger.error(f"Adapter {channel.value} failed to start: {result}")
         logger.info("Gateway started with %d adapters", len(self.adapters))
 
     async def stop(self):

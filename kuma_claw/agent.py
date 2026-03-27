@@ -171,7 +171,7 @@ def web_search(query: str, limit: int = 5) -> str:
     try:
         from duckduckgo_search import DDGS
 
-        with DDGS() as ddgs:
+        with DDGS(timeout=20) as ddgs:
             results_raw = ddgs.text(query, max_results=limit)
         results = [
             f"标题：{r.get('title')}\n内容：{r.get('body')}\n链接：{r.get('href')}"

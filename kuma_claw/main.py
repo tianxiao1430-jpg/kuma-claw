@@ -6,6 +6,7 @@ Kuma Claw - 主入口
 import asyncio
 import logging
 import os
+import signal
 import sys
 import threading
 import time
@@ -146,10 +147,18 @@ def main():
             await gateway.stop()
 
     if args.slack or args.telegram or args.all:
+        loop = asyncio.new_event_loop()
+
+        def handle_sigterm(*_):
+            loop.call_soon_threadsafe(loop.stop)
+
+        signal.signal(signal.SIGTERM, handle_sigterm)
         try:
-            asyncio.run(run_services())
+            loop.run_until_complete(run_services())
         except KeyboardInterrupt:
             print("\n👋 再见!")
+        finally:
+            loop.close()
 
     # 如果只启动了 Web，保持运行
     elif args.web:
