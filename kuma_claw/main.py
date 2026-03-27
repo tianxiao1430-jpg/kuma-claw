@@ -140,7 +140,9 @@ def main():
         try:
             while True:
                 await asyncio.sleep(3600)
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            pass
+        finally:
             await gateway.stop()
 
     if args.slack or args.telegram or args.all:

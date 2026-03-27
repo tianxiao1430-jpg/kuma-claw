@@ -8,8 +8,8 @@ Kuma Claw - 统一资源索引器 (Skill & Tool Indexer)
 import logging
 from pathlib import Path
 
-from kuma_claw.memory import memory_manager
-from kuma_claw.skills.skill_manager import SkillManager
+from .memory import memory_manager
+from .skills.skill_manager import SkillManager
 
 logger = logging.getLogger("kuma_claw.indexer")
 
@@ -20,6 +20,10 @@ def index_all_resources(skills_dir: Path):
     skills = manager.list_skills()
 
     indexed_count = 0
+
+    # 先清除旧的索引数据，避免重复
+    memory_manager.store.clear(source="registry:skill")
+    memory_manager.store.clear(source="registry:tool")
 
     for s in skills:
         # 构建索引内容

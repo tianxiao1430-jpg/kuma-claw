@@ -24,6 +24,9 @@ rich>=13.0.0
 # 安全存储
 keyring>=24.0.0
 
+# HTTP 客户端（OAuth 等）
+httpx>=0.24.0
+
 # 记忆系统
 requests>=2.31.0
 
@@ -36,7 +39,7 @@ duckduckgo-search>=6.0.0
 # 重试策略
 tenacity>=8.2.0
 
-# 测试
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-pytest-cov>=4.1.0
+# 测试（开发环境安装：pip install .[dev]）
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+# pytest-cov>=4.1.0

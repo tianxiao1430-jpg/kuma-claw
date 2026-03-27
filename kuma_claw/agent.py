@@ -7,6 +7,7 @@ Kuma Claw - Agent 定义
 
 import logging
 import os
+import threading
 import time
 from datetime import datetime
 from typing import Any, Optional
@@ -33,11 +34,14 @@ class AgentCache:
     """
 
     _instance: Optional["AgentCache"] = None
+    _lock: threading.Lock = threading.Lock()
 
     def __new__(cls) -> "AgentCache":
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._init()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._init()
         return cls._instance
 
     def _init(self):
@@ -339,12 +343,19 @@ def create_agent(query: str = "") -> LlmAgent:
     )
 
 
-def get_agent(force_refresh: bool = False) -> LlmAgent:
-    """获取 Agent 实例（单例 + TTL 缓存）
+def get_agent(query: str = "", force_refresh: bool = False) -> LlmAgent:
+    """获取 Agent 实例
+
+    当 query 非空时，总是创建新的 agent 以支持动态工具注入。
+    当 query 为空时，使用缓存。
 
     Args:
+        query: 用户消息，用于动态工具注入
         force_refresh: 是否强制刷新缓存
     """
+    if query:
+        # 动态工具注入：每次创建新 agent
+        return create_agent(query)
     if _cache.agent_cache is None or not _cache.is_valid(_cache.agent_cache_time) or force_refresh:
         _cache.agent_cache = create_agent()
         _cache.agent_cache_time = time.time()

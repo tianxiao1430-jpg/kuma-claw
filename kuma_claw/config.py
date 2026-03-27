@@ -50,10 +50,11 @@ def _get_machine_key() -> bytes:
 
 
 def _encrypt_value(value: str) -> str:
-    """简单加密（XOR + Base64）
+    """简单混淆（XOR + Base64）
 
-    注意：这不是军用级加密，但足以防止明文泄露
-    对于高安全需求，仍应使用 keyring
+    警告：这不是真正的加密，仅防止明文直接可读。
+    密钥基于机器标识，任何能访问本机的人都可逆推。
+    对于高安全需求，请使用 keyring。
     """
     key = _get_machine_key()
     value_bytes = value.encode("utf-8")
@@ -107,8 +108,11 @@ class Config:
     def _load_config(self) -> dict:
         """加载配置"""
         if CONFIG_FILE.exists():
-            with CONFIG_FILE.open("r") as f:
-                return json.load(f)
+            try:
+                with CONFIG_FILE.open("r") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"配置文件损坏，使用默认配置: {e}")
         return {
             "model": "gemini-3.1-flash",
             "channels": {"slack": {"enabled": False}, "telegram": {"enabled": False}},
@@ -282,7 +286,11 @@ class Config:
     @property
     def web_ui_port(self) -> int:
         """获取 Web UI 端口，支持环境变量 KUMA_WEB_PORT 覆盖"""
-        return int(os.getenv("KUMA_WEB_PORT", str(self.config.get("web_ui_port", 8080))))
+        try:
+            return int(os.getenv("KUMA_WEB_PORT", str(self.config.get("web_ui_port", 8080))))
+        except ValueError:
+            logger.warning("KUMA_WEB_PORT 不是有效数字，使用默认端口 8080")
+            return 8080
 
     # ============================================
     # 便捷方法
