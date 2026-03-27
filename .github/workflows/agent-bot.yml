@@ -17,30 +17,40 @@ jobs:
     steps:
       - name: Extract Prompt
         id: prompt
+        env:
+          COMMENT: ${{ github.event.comment.body }}
         run: |
-          COMMENT="${{ github.event.comment.body }}"
           # 去掉 @claw 得到纯 Prompt
           PROMPT=$(echo "$COMMENT" | sed 's/@claw//' | xargs)
-          
+
           echo "text<<EOF" >> $GITHUB_OUTPUT
           echo "$PROMPT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
       
       - name: Send to OpenClaw
+        env:
+          WEBHOOK_URL: ${{ vars.OPENCLAW_WEBHOOK_URL }}
+          OPENCLAW_TOKEN: ${{ secrets.OPENCLAW_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          PROMPT_TEXT: ${{ steps.prompt.outputs.text }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
         run: |
-          curl -X POST "${{ vars.OPENCLAW_WEBHOOK_URL }}" \
-            -H "Authorization: Bearer ${{ secrets.OPENCLAW_TOKEN }}" \
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Authorization: Bearer $OPENCLAW_TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{
-              "event": "mention",
-              "repository": "${{ github.repository }}",
-              "issue_number": ${{ github.event.issue.number }},
-              "issue_title": "${{ github.event.issue.title }}",
-              "issue_body": ${{ toJSON(github.event.issue.body) }},
-              "prompt": ${{ toJSON(steps.prompt.outputs.text) }},
-              "commenter": "${{ github.event.comment.user.login }}",
-              "comment_url": "${{ github.event.comment.html_url }}"
-            }'
+            -d "$(jq -n \
+              --arg repo "$REPO" \
+              --argjson issue_number "${ISSUE_NUMBER}" \
+              --arg issue_title "$ISSUE_TITLE" \
+              --arg issue_body "$ISSUE_BODY" \
+              --arg prompt "$PROMPT_TEXT" \
+              --arg commenter "$COMMENTER" \
+              --arg comment_url "$COMMENT_URL" \
+              '{event:"mention",repository:$repo,issue_number:$issue_number,issue_title:$issue_title,issue_body:$issue_body,prompt:$prompt,commenter:$commenter,comment_url:$comment_url}')"
       
       - name: Confirm Received
         if: success()

@@ -33,7 +33,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # ============================================
 
 # 公开路径（无需认证）
-_PUBLIC_PATHS = {"/oauth/callback", "/api/status", "/api/oauth/status"}
+_PUBLIC_PATHS = {"/oauth/callback", "/api/oauth/status"}
 
 
 class WebUIAuthMiddleware(BaseHTTPMiddleware):
@@ -241,7 +241,6 @@ async def oauth_authorize():
             {
                 "state": flow.state,
                 "client_id": client_id,
-                "client_secret": client_secret,
             },
             f,
         )
@@ -309,7 +308,7 @@ async def oauth_callback(
     with open(state_file) as f:
         saved_state = json.load(f)
 
-    if state != saved_state["state"]:
+    if not secrets.compare_digest(state, saved_state["state"]):
         return HTMLResponse(
             content="""
             <html>
@@ -327,7 +326,7 @@ async def oauth_callback(
     # 换取 Token
     try:
         client_id = saved_state["client_id"]
-        client_secret = saved_state["client_secret"]
+        client_secret = config.get_google_oauth_client_secret() or ""
 
         flow = OAuthFlow(client_id, client_secret)
         tokens = flow.exchange_code_for_tokens(code)
@@ -423,7 +422,7 @@ async def oauth_clear():
 # ============================================
 
 
-def start_web_ui(host: str = "0.0.0.0", port: int | None = None):
+def start_web_ui(host: str = "127.0.0.1", port: int | None = None):
     """启动 Web UI（Issue #107：端口优先从环境变量 KUMA_WEB_PORT 读取）"""
     if port is None:
         port = config.web_ui_port

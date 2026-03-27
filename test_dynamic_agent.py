@@ -1,29 +1,36 @@
 """
 测试 Kuma Claw 动态工具注入
 """
-import logging
-from pathlib import Path
-from kuma_claw.agent import create_agent
 
-# 启用日志查看注入过程
+import logging
+from unittest.mock import patch
+
+import pytest
+
 logging.basicConfig(level=logging.INFO)
 
-def test_dynamic_injection(query: str):
-    print(f"\n🔍 测试查询: '{query}'")
-    agent = create_agent(query=query)
-    
-    print(f"🛠️  已注入工具列表:")
-    tool_names = []
-    for tool in agent.tools:
-        name = getattr(tool, 'name', None) or tool.func.__name__
-        tool_names.append(name)
-        print(f"  - {name}")
-        
-    if "get_weather" in tool_names:
-        print("✅ 成功匹配并注入天气技能！")
-    else:
-        print("ℹ️  未注入天气技能（不相关或逻辑有误）。")
+
+def test_dynamic_injection_creates_agent():
+    """测试 create_agent 能正常创建 agent"""
+    from kuma_claw.agent import create_agent
+
+    agent = create_agent(query="")
+    assert agent is not None
+    assert agent.name == "kuma_claw"
+    assert len(agent.tools) > 0
+
+
+def test_dynamic_injection_includes_core_tools():
+    """测试 agent 包含核心工具"""
+    from kuma_claw.agent import get_core_tools
+
+    tools = get_core_tools()
+    tool_names = [t.func.__name__ for t in tools]
+    assert "web_search" in tool_names
+    assert "get_current_time" in tool_names
+    assert "remember" in tool_names
+    assert "recall" in tool_names
+
 
 if __name__ == "__main__":
-    # 尝试一个非常明确的触发词
-    test_dynamic_injection("weather")
+    pytest.main([__file__, "-v"])

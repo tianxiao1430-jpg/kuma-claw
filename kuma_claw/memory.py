@@ -92,6 +92,17 @@ class MemoryStore:
                 VALUES('delete', old.rowid, old.content);
             END;
 
+            CREATE TRIGGER IF NOT EXISTS memories_au_before
+            BEFORE UPDATE ON memories BEGIN
+                INSERT INTO memories_fts(memories_fts, rowid, content)
+                VALUES('delete', old.rowid, old.content);
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS memories_au_after
+            AFTER UPDATE ON memories BEGIN
+                INSERT INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
+            END;
+
             CREATE TABLE IF NOT EXISTS metadata (
                 key TEXT PRIMARY KEY,
                 value TEXT

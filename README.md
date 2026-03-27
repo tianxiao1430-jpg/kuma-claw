@@ -41,7 +41,7 @@ python -m kuma_claw.gateway
 
 ## 🎯 核心功能
 
-- **多渠支持**: Telegram, Slack, Discord, Web, WhatsApp
+- **多渠道支持**: Telegram, Slack, Web (Discord, WhatsApp 计划中)
 - **Skills 系统**: 模块化技能扩展机制
 - **记忆系统**: 长期记忆和上下文管理
 - **Google Workspace**: Gmail, Calendar, Sheets, Docs 集成
@@ -94,5 +94,5 @@ Apache License 2.0
 
 ---
 
-**版本**: v1.0
+**版本**: v0.1.1
 **状态**: 🚀 开发中

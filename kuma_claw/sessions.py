@@ -62,8 +62,17 @@ class SQLiteSessionService(BaseSessionService):
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS session_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                event_data TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS idx_sessions_app ON sessions(app_name);
+            CREATE INDEX IF NOT EXISTS idx_session_events_sid ON session_events(session_id);
         """)
         conn.commit()
 
@@ -157,8 +166,24 @@ class SQLiteSessionService(BaseSessionService):
         except (ValueError, TypeError):
             last_update_time = 0.0
 
-        # 从数据库加载 events
-        events = self._deserialize_events(row["events"])
+        # 优先从 session_events 表加载（新格式），回退到 events 列（旧格式）
+        with self._lock:
+            event_rows = (
+                self._get_conn()
+                .execute(
+                    "SELECT event_data FROM session_events WHERE session_id = ? ORDER BY id",
+                    (session_id,),
+                )
+                .fetchall()
+            )
+        if event_rows:
+            events = []
+            for er in event_rows:
+                ev = self._deserialize_event(json.loads(er["event_data"]))
+                if ev:
+                    events.append(ev)
+        else:
+            events = self._deserialize_events(row["events"])
 
         # 应用 config 过滤
         if config:
@@ -228,29 +253,21 @@ class SQLiteSessionService(BaseSessionService):
         if event.partial:
             return event
 
-        # 持久化到数据库
+        # 持久化到数据库：只 INSERT 新 event（O(1) 而非 O(n)）
         now_iso = datetime.now(timezone.utc).isoformat()
-
-        # 序列化所有 events
-        events_json = json.dumps([self._serialize_event(e) for e in session.events])
+        event_data = json.dumps(self._serialize_event(event))
 
         with self._lock:
-            cursor = self._get_conn().execute(
-                """
-                UPDATE sessions
-                SET state = ?, events = ?, updated_at = ?
-                WHERE id = ? AND app_name = ? AND user_id = ?
-                """,
-                (
-                    json.dumps(session.state),
-                    events_json,
-                    now_iso,
-                    session.id,
-                    session.app_name,
-                    session.user_id,
-                ),
+            conn = self._get_conn()
+            conn.execute(
+                "INSERT INTO session_events (session_id, event_data, created_at) VALUES (?, ?, ?)",
+                (session.id, event_data, now_iso),
             )
-            self._get_conn().commit()
+            cursor = conn.execute(
+                "UPDATE sessions SET state = ?, updated_at = ? WHERE id = ? AND app_name = ? AND user_id = ?",
+                (json.dumps(session.state), now_iso, session.id, session.app_name, session.user_id),
+            )
+            conn.commit()
 
         if cursor.rowcount == 0:
             logger.warning(f"持久化事件失败：会话 {session.id} 不存在")
