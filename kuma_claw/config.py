@@ -293,6 +293,29 @@ class Config:
             return 8080
 
     # ============================================
+    # 用户白名单（Issue #138）
+    # ============================================
+
+    def get_allowed_users(self) -> set[str]:
+        """获取允许使用 Bot 的用户 ID 白名单。空集合表示允许所有人。"""
+        users = self.config.get("allowed_users", [])
+        return set(str(u) for u in users)
+
+    def set_allowed_users(self, users: list[str]):
+        """设置用户白名单"""
+        self.config["allowed_users"] = users
+        self.save()
+
+    # ============================================
+    # Rate Limiting 配置（Issue #166）
+    # ============================================
+
+    @property
+    def rate_limit_per_minute(self) -> int:
+        """每用户每分钟最大请求数，0 表示不限制"""
+        return int(self.config.get("rate_limit_per_minute", 20))
+
+    # ============================================
     # 便捷方法
     # ============================================
 

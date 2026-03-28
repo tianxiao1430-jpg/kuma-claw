@@ -307,7 +307,11 @@ def get_tools(message_text: str | None = None) -> list:
 
 
 def get_system_instruction() -> str:
-    """构建系统提示词"""
+    """构建系统提示词
+
+    注意：时间信息使用占位符，由 get_current_time 工具在运行时提供准确时间，
+    避免缓存的 agent 使用过期时间（#165）。
+    """
     from .prompts import build_system_prompt
 
     base_prompt = build_system_prompt()
@@ -324,7 +328,7 @@ def get_system_instruction() -> str:
 给用户的实际回复...
 ```
 """
-    time_prompt = f"\n\n## 系统信息\n当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    time_prompt = "\n\n## 系统信息\n如需当前时间，请调用 get_current_time 工具获取准确时间。\n"
 
     return base_prompt + time_prompt + internal_prompt
 

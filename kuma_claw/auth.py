@@ -60,17 +60,48 @@ class OAuthTokenManager:
         self.tokens = self._load_tokens()
 
     def _load_tokens(self) -> dict:
-        """加载 Token"""
-        if self.tokens_file.exists():
+        """加载 Token（支持混淆存储，#137）"""
+        if not self.tokens_file.exists():
+            return {}
+        try:
             with self.tokens_file.open("r") as f:
-                return json.load(f)
-        return {}
+                data = json.load(f)
+            # 如果使用了混淆存储，解混淆敏感字段
+            if data.get("_obfuscated"):
+                from .config import _decrypt_value
+                for provider in data:
+                    if provider.startswith("_"):
+                        continue
+                    tokens = data[provider]
+                    for key in ("access_token", "refresh_token"):
+                        if key in tokens:
+                            tokens[key] = _decrypt_value(tokens[key])
+            return data
+        except (json.JSONDecodeError, OSError, ValueError) as e:
+            logger.warning(f"Failed to load tokens: {e}")
+            return {}
 
     def _save_tokens(self):
-        """保存 Token"""
+        """保存 Token（混淆敏感字段，#137）"""
         self.tokens_file.parent.mkdir(parents=True, exist_ok=True)
+        from .config import _encrypt_value
+        # 深拷贝后混淆敏感字段
+        save_data = {}
+        for key, value in self.tokens.items():
+            if key.startswith("_"):
+                continue
+            if isinstance(value, dict):
+                entry = dict(value)
+                for sensitive_key in ("access_token", "refresh_token"):
+                    if sensitive_key in entry:
+                        entry[sensitive_key] = _encrypt_value(entry[sensitive_key])
+                save_data[key] = entry
+            else:
+                save_data[key] = value
+        save_data["_obfuscated"] = True
         with self.tokens_file.open("w") as f:
-            json.dump(self.tokens, f, indent=2)
+            json.dump(save_data, f, indent=2)
+        self.tokens_file.chmod(0o600)
 
     def save_google_tokens(self, access_token: str, refresh_token: str, expires_in: int):
         """保存 Google Token"""

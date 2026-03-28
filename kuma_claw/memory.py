@@ -79,7 +79,7 @@ class MemoryStore:
             );
 
             CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts
-            USING fts5(content, content='memories', content_rowid='rowid');
+            USING fts5(content, content='memories', content_rowid='rowid', tokenize='unicode61');
 
             CREATE TRIGGER IF NOT EXISTS memories_ai
             AFTER INSERT ON memories BEGIN

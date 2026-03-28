@@ -6,8 +6,10 @@ Kuma Claw Gateway - 网关核心
 """
 
 import asyncio
+import collections
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -216,10 +218,49 @@ class Gateway:
         """注册渠道适配器"""
         self.adapters[channel] = adapter
 
+    def _check_rate_limit(self, user_id: str) -> bool:
+        """检查用户是否超出速率限制。返回 True 表示通过。"""
+        from ..config import config
+        limit = config.rate_limit_per_minute
+        if limit <= 0:
+            return True
+        if not hasattr(self, "_rate_limits"):
+            self._rate_limits: dict[str, list[float]] = {}
+        now = time.time()
+        timestamps = self._rate_limits.setdefault(user_id, [])
+        # 清理 60 秒前的记录
+        self._rate_limits[user_id] = [t for t in timestamps if now - t < 60]
+        if len(self._rate_limits[user_id]) >= limit:
+            return False
+        self._rate_limits[user_id].append(now)
+        return True
+
     async def process_message(self, message: Message) -> Reply:
         """处理消息"""
         if not self.agent_runner:
             raise RuntimeError("AgentRunner not initialized. Call set_agent() first.")
+
+        # 用户白名单检查 (#138)
+        from ..config import config
+        allowed_users = config.get_allowed_users()
+        if allowed_users and message.user_id not in allowed_users:
+            logger.warning(f"User {message.user_id} not in whitelist, rejecting")
+            return Reply(
+                id=f"reply-{message.id}",
+                message_id=message.id,
+                content="抱歉，您没有使用此 Bot 的权限。请联系管理员。",
+                agent="default",
+            )
+
+        # 速率限制检查 (#166)
+        if not self._check_rate_limit(message.user_id):
+            logger.warning(f"User {message.user_id} rate limited")
+            return Reply(
+                id=f"reply-{message.id}",
+                message_id=message.id,
+                content="请求过于频繁，请稍后再试。",
+                agent="default",
+            )
 
         try:
             # 1. Build SessionKey from message
