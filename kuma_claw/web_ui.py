@@ -33,7 +33,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # ============================================
 
 # 公开路径（无需认证）
-_PUBLIC_PATHS = {"/oauth/callback", "/api/oauth/status"}
+_PUBLIC_PATHS = {"/oauth/callback", "/api/oauth/status", "/health"}
 
 
 class WebUIAuthMiddleware(BaseHTTPMiddleware):
@@ -379,6 +379,12 @@ async def oauth_callback(
             """,
             status_code=500,
         )
+
+
+@app.get("/health")
+async def health_check():
+    """标准健康检查 endpoint（#144）"""
+    return JSONResponse({"status": "ok", "service": "kuma-claw"})
 
 
 @app.get("/api/status")

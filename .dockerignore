@@ -1,0 +1,15 @@
+.git
+.github
+__pycache__
+*.pyc
+.env
+.venv
+venv
+htmlcov
+.pytest_cache
+*.egg-info
+dist
+build
+uv.lock
+*.tar.gz
+*.skill

@@ -77,9 +77,18 @@ class TelegramAdapter(BaseAdapter):
             logger.info("Telegram Bot 已停止")
 
     async def send(self, chat_id: str, content: str, **kwargs):
-        """发送消息到 Telegram 聊天"""
-        if self.app:
+        """发送消息到 Telegram 聊天（自动分段，#170）"""
+        if not self.app:
+            return
+        # Telegram 消息上限 4096 字符
+        max_len = 4096
+        if len(content) <= max_len:
             await self.app.bot.send_message(chat_id=int(chat_id), text=content)
+        else:
+            # 按段落分割，尽量不破坏语义
+            for i in range(0, len(content), max_len):
+                chunk = content[i : i + max_len]
+                await self.app.bot.send_message(chat_id=int(chat_id), text=chunk)
 
     # ========================================
     # 命令处理器
@@ -156,8 +165,8 @@ class TelegramAdapter(BaseAdapter):
         # 通过 Gateway 处理
         reply = await self.gateway.process_message(message)
 
-        # 发送响应
-        await update.message.reply_text(reply.content)
+        # 发送响应（自动分段）
+        await self._send_reply(update, reply.content)
 
     async def _handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理图片消息"""
@@ -194,8 +203,17 @@ class TelegramAdapter(BaseAdapter):
         # 通过 Gateway 处理
         reply = await self.gateway.process_message(message)
 
-        # 发送响应
-        await update.message.reply_text(reply.content)
+        # 发送响应（自动分段）
+        await self._send_reply(update, reply.content)
+
+    async def _send_reply(self, update: Update, text: str):
+        """发送回复，超过 4096 字符自动分段（#170）"""
+        max_len = 4096
+        if len(text) <= max_len:
+            await update.message.reply_text(text)
+        else:
+            for i in range(0, len(text), max_len):
+                await update.message.reply_text(text[i : i + max_len])
 
 
 # ========================================
