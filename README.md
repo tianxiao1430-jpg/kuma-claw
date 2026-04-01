@@ -6,6 +6,52 @@
 
 > 🦞 基于 Google ADK 的智能办公助手
 
+---
+
+## 👥 招募开发者
+
+**我们正在寻找志同道合的开发者一起打造开源 AI 助手！**
+
+### 🎯 项目愿景
+
+让每个小微企业/个人开发者都能拥有**零成本部署**的 AI 办公助手，一键部署到 GCP 免费额度。
+
+### 🔧 技术栈
+
+| 领域 | 技术 |
+|------|------|
+| **后端** | Python 3.11+, Google ADK, FastAPI |
+| **部署** | GCP Cloud Run, Docker, Cloud Build |
+| **渠道** | Telegram Bot API, Slack API |
+| **AI** | Google Generative AI (Gemini) |
+| **工具** | Git, pytest, GitHub Actions |
+
+### 🙋 需要的角色
+
+- **后端开发** - Python/API 开发经验
+- **前端开发** - Web UI/管理面板（计划中）
+- **Skills 开发者** - 编写新技能模块
+- **文档/翻译** - 中/日/英多语言支持
+- **测试** - 单元测试/集成测试
+
+### 🎁 你能获得什么
+
+- 📈 开源项目经验（可写进简历）
+- 🤝 认识优秀的开发者
+- 💡 学习 AI Agent/GCP 部署实战
+- 🌟 GitHub 贡献记录
+- ☕ 线上技术分享会
+
+### 📮 如何加入
+
+1. **Fork 仓库** 开始贡献代码
+2. **加入讨论** - 在 Issues 中参与讨论
+3. **联系我们** - tianxiao1430@gmail.com 或直接在 Issue 留言
+
+**新手？** 查看标记为 [`good first issue`](https://github.com/tianxiao1430-jpg/kuma-claw/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) 的任务开始！
+
+---
+
 ## 🚀 一键部署
 
 **5 分钟部署到 GCP 免费额度！**
@@ -91,6 +137,8 @@ pytest --cov=kuma_claw --cov-report=html
 - Bug 修复
 - 文档改进
 - 功能建议
+
+查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详细的贡献指南。
 
 ## 📄 许可证
 
