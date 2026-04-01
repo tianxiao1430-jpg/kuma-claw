@@ -1,0 +1,78 @@
+# GCP Cloud Build 配置
+# 自动构建并部署到 Cloud Run
+
+steps:
+  # 构建 Docker 镜像
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/kuma-claw:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/kuma-claw:latest'
+      - '.'
+    id: 'build'
+
+  # 推送到 Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'gcr.io/$PROJECT_ID/kuma-claw'
+    id: 'push'
+
+  # 部署到 Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'kuma-claw'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/kuma-claw:$SHORT_SHA'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - '${REGION:-asia-northeast1}'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT_ID'
+      - '--memory'
+      - '${MEMORY:-512Mi}'
+      - '--cpu'
+      - '${CPU:-1}'
+      - '--concurrency'
+      - '${CONCURRENCY:-80}'
+      - '--timeout'
+      - '${TIMEOUT:-300s}'
+    id: 'deploy'
+
+  # 输出服务 URL
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'services'
+      - 'describe'
+      - 'kuma-claw'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - '${REGION:-asia-northeast1}'
+      - '--format'
+      - 'value(status.url)'
+    id: 'output-url'
+
+images:
+  - 'gcr.io/$PROJECT_ID/kuma-claw:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/kuma-claw:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _REGION: asia-northeast1
+  _MEMORY: 512Mi
+  _CPU: '1'
+  _CONCURRENCY: '80'
+  _TIMEOUT: 300s
