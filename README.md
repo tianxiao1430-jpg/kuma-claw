@@ -2,155 +2,155 @@
 
 [![Deploy to GCP](https://storage.googleapis.com/cloudrun/button.svg)](https://deploy.cloud.run/?git_repo=https://github.com/tianxiao1430-jpg/kuma-claw.git)
 
-[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+[English](./README.md) | [简体中文](./README.zh.md) | [日本語](./README.ja.md)
 
-> 🦞 基于 Google ADK 的智能办公助手
+> 🦞 AI Office Assistant built on Google ADK
 
 ---
 
-## 👥 招募开发者
+## 👥 Recruiting Developers
 
-**我们正在寻找志同道合的开发者一起打造开源 AI 助手！**
+**We're looking for developers to join our open-source AI assistant project!**
 
-### 🎯 项目愿景
+### 🎯 Project Vision
 
-让每个小微企业/个人开发者都能拥有**零成本部署**的 AI 办公助手，一键部署到 GCP 免费额度。
+Enable every small business and indie developer to deploy an **AI office assistant at zero cost** with one-click deployment to GCP free tier.
 
-### 🔧 技术栈
+### 🔧 Tech Stack
 
-| 领域 | 技术 |
-|------|------|
-| **后端** | Python 3.11+, Google ADK, FastAPI |
-| **部署** | GCP Cloud Run, Docker, Cloud Build |
-| **渠道** | Telegram Bot API, Slack API |
+| Area | Technology |
+|------|------------|
+| **Backend** | Python 3.11+, Google ADK, FastAPI |
+| **Deployment** | GCP Cloud Run, Docker, Cloud Build |
+| **Channels** | Telegram Bot API, Slack API |
 | **AI** | Google Generative AI (Gemini) |
-| **工具** | Git, pytest, GitHub Actions |
+| **Tools** | Git, pytest, GitHub Actions |
 
-### 🙋 需要的角色
+### 🙋 Roles We Need
 
-- **后端开发** - Python/API 开发经验
-- **前端开发** - Web UI/管理面板（计划中）
-- **Skills 开发者** - 编写新技能模块
-- **文档/翻译** - 中/日/英多语言支持
-- **测试** - 单元测试/集成测试
+- **Backend Developers** - Python/API development experience
+- **Frontend Developers** - Web UI/Admin panel (planned)
+- **Skills Developers** - Build new skill modules
+- **Documentation/Translation** - Chinese/Japanese/English support
+- **Testers** - Unit/Integration testing
 
-### 🎁 你能获得什么
+### 🎁 What You Get
 
-- 📈 开源项目经验（可写进简历）
-- 🤝 认识优秀的开发者
-- 💡 学习 AI Agent/GCP 部署实战
-- 🌟 GitHub 贡献记录
-- ☕ 线上技术分享会
+- 📈 Open-source project experience (great for resume)
+- 🤝 Meet talented developers
+- 💡 Learn AI Agent/GCP deployment hands-on
+- 🌟 GitHub contribution record
+- ☕ Online tech sharing sessions
 
-### 📮 如何加入
+### 📮 How to Join
 
-1. **Fork 仓库** 开始贡献代码
-2. **加入讨论** - 在 Issues 中参与讨论
-3. **联系我们** - tianxiao1430@gmail.com 或直接在 Issue 留言
+1. **Fork the repo** and start contributing
+2. **Join discussions** - Participate in Issues
+3. **Contact us** - tianxiao1430@gmail.com or comment on Issues
 
-**新手？** 查看标记为 [`good first issue`](https://github.com/tianxiao1430-jpg/kuma-claw/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) 的任务开始！
+**New?** Start with [`good first issue`](https://github.com/tianxiao1430-jpg/kuma-claw/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) tasks!
 
 ---
 
-## 🚀 一键部署
+## 🚀 One-Click Deployment
 
-**5 分钟部署到 GCP 免费额度！**
+**Deploy to GCP free tier in 5 minutes!**
 
-- [📖 GCP 部署指南](docs/DEPLOYMENT.md) - 详细部署步骤
+- [📖 GCP Deployment Guide](docs/DEPLOYMENT.md) - Detailed steps
 - [![Deploy to GCP](https://storage.googleapis.com/cloudrun/button.svg)](https://deploy.cloud.run/?git_repo=https://github.com/tianxiao1430-jpg/kuma-claw.git)
 
-## 📚 文档
+## 📚 Documentation
 
-详细文档已移至 [`docs/`](docs/) 目录：
+Full documentation in [`docs/`](docs/) directory:
 
-- **[📦 部署指南](docs/DEPLOYMENT.md)** - GCP 一键部署（新增）
-- **[交付文档](docs/DELIVERY.md)** - 项目交付总结
-- **[快速参考](docs/QUICK_REFERENCE.md)** - 常用命令和 API 速查
-- **[集成指南](docs/INTEGRATION_GUIDE.md)** - 如何集成 Kuma Claw
-- **[技能系统](docs/SKILLS_README.md)** - Skills 系统使用说明
-- **[安全策略](SECURITY.md)** - 安全最佳实践
+- **[📦 Deployment Guide](docs/DEPLOYMENT.md)** - GCP one-click deployment (NEW)
+- **[Delivery Report](docs/DELIVERY.md)** - Project delivery summary
+- **[Quick Reference](docs/QUICK_REFERENCE.md)** - Commands and API cheat sheet
+- **[Integration Guide](docs/INTEGRATION_GUIDE.md)** - How to integrate Kuma Claw
+- **[Skills System](docs/SKILLS_README.md)** - Skills system documentation
+- **[Security Policy](SECURITY.md)** - Security best practices
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 1. 安装依赖
+### 1. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 配置环境变量
+### 2. Configure Environment
 
 ```bash
 cp .env.example .env
-# 编辑 .env 文件，填入必要的 API 密钥
+# Edit .env file with your API keys
 ```
 
-### 3. 运行
+### 3. Run
 
 ```bash
-# 命令行模式
+# CLI mode
 python -m kuma_claw.main
 
-# 或作为服务运行
+# Or run as service
 python -m kuma_claw.gateway
 ```
 
-## 🎯 核心功能
+## 🎯 Core Features
 
-- **多渠道支持**: Telegram, Slack, Web (Discord, WhatsApp 计划中)
-- **Skills 系统**: 模块化技能扩展机制
-- **记忆系统**: 长期记忆和上下文管理
-- **Google Workspace**: Gmail, Calendar, Sheets, Docs 集成
-- **网络搜索**: DuckDuckGo 实时信息检索
+- **Multi-Channel**: Telegram, Slack, Web (Discord, WhatsApp planned)
+- **Skills System**: Modular skill extension mechanism
+- **Memory System**: Long-term memory and context management
+- **Google Workspace**: Gmail, Calendar, Sheets, Docs integration
+- **Web Search**: DuckDuckGo real-time search
 
-## 📁 项目结构
+## 📁 Project Structure
 
 ```
 .
-├── kuma_claw/              # 核心代码
-│   ├── agent.py           # Agent 定义
-│   ├── channels/          # 渠道实现
-│   ├── tools/             # 工具集
-│   ├── skills/            # Skills 系统
-│   └── prompts/           # 提示词模板
-├── tests/                  # 测试套件
-├── docs/                   # 文档
+├── kuma_claw/              # Core code
+│   ├── agent.py           # Agent definition
+│   ├── channels/          # Channel implementations
+│   ├── tools/             # Toolset
+│   ├── skills/            # Skills system
+│   └── prompts/           # Prompt templates
+├── tests/                  # Test suite
+├── docs/                   # Documentation
 ├── .github/workflows/     # CI/CD
-├── requirements.txt        # 依赖
-└── pytest.ini             # 测试配置
+├── requirements.txt        # Dependencies
+└── pytest.ini             # Test configuration
 ```
 
-## 🧪 测试
+## 🧪 Testing
 
 ```bash
-# 运行所有测试
+# Run all tests
 pytest
 
-# 运行测试并生成覆盖率报告
+# Run tests with coverage report
 pytest --cov=kuma_claw --cov-report=html
 ```
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎贡献：
-- 新的 Skills
-- Bug 修复
-- 文档改进
-- 功能建议
+Contributions welcome:
+- New Skills
+- Bug fixes
+- Documentation improvements
+- Feature requests
 
-查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详细的贡献指南。
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
-## 📄 许可证
+## 📄 License
 
 Apache License 2.0
 
-## 🔗 相关链接
+## 🔗 Links
 
-- [GitHub 仓库](https://github.com/tianxiao1430-jpg/kuma-claw)
-- [Issue 追踪](https://github.com/tianxiao1430-jpg/kuma-claw/issues)
-- [文档中心](docs/)
+- [GitHub Repo](https://github.com/tianxiao1430-jpg/kuma-claw)
+- [Issue Tracker](https://github.com/tianxiao1430-jpg/kuma-claw/issues)
+- [Documentation](docs/)
 
 ---
 
-**版本**: v0.1.1
-**状态**: 🚀 开发中
+**Version**: v0.1.1
+**Status**: 🚀 In Development
