@@ -1,13 +1,23 @@
 # Kuma Claw
 
+[![Deploy to GCP](https://storage.googleapis.com/cloudrun/button.svg)](https://deploy.cloud.run/?git_repo=https://github.com/tianxiao1430-jpg/kuma-claw.git)
+
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
 > 🦞 基于 Google ADK 的智能办公助手
+
+## 🚀 一键部署
+
+**5 分钟部署到 GCP 免费额度！**
+
+- [📖 GCP 部署指南](docs/DEPLOYMENT.md) - 详细部署步骤
+- [![Deploy to GCP](https://storage.googleapis.com/cloudrun/button.svg)](https://deploy.cloud.run/?git_repo=https://github.com/tianxiao1430-jpg/kuma-claw.git)
 
 ## 📚 文档
 
 详细文档已移至 [`docs/`](docs/) 目录：
 
+- **[📦 部署指南](docs/DEPLOYMENT.md)** - GCP 一键部署（新增）
 - **[交付文档](docs/DELIVERY.md)** - 项目交付总结
 - **[快速参考](docs/QUICK_REFERENCE.md)** - 常用命令和 API 速查
 - **[集成指南](docs/INTEGRATION_GUIDE.md)** - 如何集成 Kuma Claw
